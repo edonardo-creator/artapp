@@ -1,6 +1,6 @@
 // Kesim listesi: çizimdeki dolapların levha parçaları (ölçü, adet, malzeme, kenar bandı), tezgahlar ve özet.
 // Parçalar 3B çizimde kullanılan aynı parça üreticisinden (parcalar) gelir; çizim ile liste birbirini tutar.
-import { TANIM, parcalar, projeAyarla, donanimAdi, modulKapakStili, T, ARK, TEZGAH_K, KAPAK_K, YENI_KURAL, RAY, RAY_OLCU } from './moduller.js';
+import { TANIM, parcalar, projeAyarla, donanimAdi, modulKapakStili, T, ARK, TEZGAH_K, KAPAK_K, YENI_KURAL, RAY, RAY_OLCU, KOSE_KURAL, ARK_KANAL, KANAL_ARKA, KANAL_DERIN } from './moduller.js';
 import { kapakStili, aluminyumMu, boyaliMi, camTuru } from './kapaklar.js';
 import { DUVAR_LISTE, egikDuzlem, EGIK_OLUR } from './yerlesim.js';
 import { parcaRengi, tezgahlar, adaEkleri, tezgahSupurgelikleri, yatayBoyEkseni, bazaKosuda, bazaKosulari } from './ortak.js';
@@ -74,6 +74,9 @@ export function modulKesimi(m, p) {
     ekle('Gövde', renk, enKucuk, q.ad, boy, en, boy); // gövde parçası: öne bakan kenar (boy) bantlı
   }
   if (kavisli.length) ozel.push(`Kavisli parçalar şablonla kesilir, listede yok: ${[...new Set(kavisli)].join(', ')}`);
+  // Köşe gövdesi kuralı (kanallı arkalık): föyde çıkmayan, elde yapılacak işler
+  if (KOSE_KURAL && ARK_KANAL && String(m.tip).includes('kavis')) ozel.push(`Kavisli alt ve üst tablada arkalık kanalı elde açılır: arka kenardan ${String(KANAL_ARKA).replace('.', ',')} mm içeride, ${String(KANAL_DERIN).replace('.', ',')} mm derin`);
+  if (KOSE_KURAL && ARK_KANAL && String(m.tip).endsWith('_lkose')) ozel.push('L köşe: iki arkalık köşede birbirine dayanır (orada kanal yoktur), elde tutturulur; raf iki parçadır');
   if (kertmeOlculeri(m, p).length) ozel.push('Kolon ya da kiriş için kertme var: ölçüsü teknik çizimde, modül ayrıntılarında');
   if (m.egikKes && EGIK_OLUR.has(m.tip) && egikDuzlem(m, p)) ozel.push('Üstü eğimli tavana göre kesilir: ölçü ve açı teknik çizimde');
   if (donanimAdi(m)) ozel.push('İç donanım: ' + donanimAdi(m) + ' (hazır alınır, listede yok)');

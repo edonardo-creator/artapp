@@ -1,0 +1,128 @@
+/* ARTAPP yeni arayüz düzeni (2026-11-23). stil.css'ten sonra yüklenir ve yalnızca onun üstüne yazar.
+   Bütün kurallar "html:not([data-duzen=klasik])" altındadır: "⋯ › Arayüz teması" penceresinde "Klasik düzen" seçilince
+   (html öğesinde data-duzen="klasik") bu dosyanın hiçbir kuralı uygulanmaz ve önceki düzen aynen geri gelir.
+   Renkler temalardan gelir (stil.css değişkenleri); bu dosya renk tanımlamaz, yalnızca yerleşim, köşe, boşluk ve düğme biçimini değiştirir.
+   Yenilikler: paneller ve çizim alanı ayrı kartlardır; başlık düğmeleri çerçevesizdir; sekmeler parçalı seçicidir;
+   form alanları dolgu zeminlidir; katalog kartları ve pencereler daha yuvarlak ve ferah; telefonda alt çubukta seçili bölüm hap biçimlidir. */
+
+html:not([data-duzen=klasik]) {
+  --r: 10px; --r-k: 8px; --r-b: 14px;
+
+  /* ---- Sol panel: sekmeler parçalı seçici olur ---- */
+  & .sekmeler { margin: 10px 10px 0; padding: 3px; gap: 2px; border: 1px solid var(--cizgi); border-radius: 12px; background: var(--panel-2); }
+  & .sekmeler button { min-height: 30px; border-radius: 9px; }
+  & .sekmeler button:hover { background: transparent; }
+  & #sol[data-sekme=modul] .sekmeler [data-sekme=modul], & #sol[data-sekme=oda] .sekmeler [data-sekme=oda], & #sol[data-sekme=gorunum] .sekmeler [data-sekme=gorunum] { background: var(--yuzey); box-shadow: var(--golge-1); }
+  & #sol[data-sekme=modul] .sekmeler [data-sekme=modul]::after, & #sol[data-sekme=oda] .sekmeler [data-sekme=oda]::after, & #sol[data-sekme=gorunum] .sekmeler [data-sekme=gorunum]::after { display: none; }
+
+  /* ---- Katalog ---- */
+  & #katalogAra { border-radius: 999px; background-color: var(--panel-2); border-color: transparent; }
+  & #katalogAra:hover { border-color: var(--cizgi-koyu); }
+  & #katalogAra:focus { background-color: var(--yuzey); border-color: var(--vurgu); }
+  & .hizli button { border-color: transparent; background: var(--panel-2); border-radius: 9px; }
+  & .hizli button:hover:not(:disabled) { background: var(--panel-2); border-color: var(--cizgi-koyu); }
+  & .hizli #doldur { background: var(--yuzey); border-color: var(--cizgi); }
+  & #katalog summary { padding: 14px 2px 8px; }
+  & #katalog h3:first-child { margin-top: 14px; }
+  & .kartlar { gap: 8px; }
+  & .kart { padding: 9px 8px; min-height: 52px; border-radius: 12px; transition: transform .12s, box-shadow .12s, border-color .12s, background-color .12s; }
+  & .kart:hover { transform: translateY(-1px); box-shadow: var(--golge-2); }
+  & .kart.kayitli { padding: 0; min-height: 0; border-radius: 12px; }
+  & .kart.kayitli > button:first-child { padding: 9px 8px; min-height: 52px; }
+  & .kart.kayitli:hover { transform: none; }
+
+  /* ---- Form alanları: dolgu zemin, çerçeve yalnızca üstüne gelince ve odakta ---- */
+  & .alan input[type=number], & .alan input[type=text], & .alan select, & .satirDuzen input, & .satirDuzen select { background-color: var(--panel-2); border-color: transparent; border-radius: 8px; }
+  & .alan input[type=number]:hover, & .alan input[type=text]:hover, & .alan select:hover, & .satirDuzen input:hover, & .satirDuzen select:hover { border-color: var(--cizgi-koyu); }
+  & .alan input[type=number]:focus, & .alan input[type=text]:focus, & .alan select:focus, & .satirDuzen input:focus, & .satirDuzen select:focus { background-color: var(--yuzey); border-color: var(--vurgu); }
+  & .kapakSec { border-radius: 8px; }
+  & aside h3 { margin: 18px 0 9px; padding-top: 14px; border-top: 1px solid var(--cizgi); }
+  & aside h3:first-child, & #oda .grup-gorunum > h3:first-of-type, & #ozellik > h2 + h3 { margin-top: 0; padding-top: 0; border-top: 0; }
+  & #ozellik > .ipucu { border-radius: 14px; padding: 32px 14px; }
+
+  /* ---- Çizim alanındaki çubuklar ---- */
+  & .cubuk-grup { padding: 4px; border-radius: 13px; }
+  & .cubuk-grup > button, & .cip span { min-height: 28px; border-radius: 9px; }
+  & .cubuk-grup .secici button { min-height: 28px; border-radius: 9px; }
+  & #denetimAc, & #ozet { height: 30px; min-height: 30px; }
+
+  /* ---- Menü, pencere, bildirim ---- */
+  & .menu { padding: 6px; border-radius: 14px; }
+  & .menu button { min-height: 36px; border-radius: 9px; }
+  & dialog { border-radius: 18px; padding: 24px; border-color: var(--cam-cizgi); }
+  & dialog h2 { font-size: 19px; }
+  & dialog .dugmeler button { min-height: 36px; }
+  & .kkKart { border-radius: 12px; transition: transform .12s, box-shadow .12s, border-color .12s; }
+  & .kkKart:hover { transform: translateY(-1px); box-shadow: var(--golge-2); border-color: var(--cizgi-koyu); }
+  & .kkKart.secili:hover { border-color: var(--vurgu); }
+  & #bildirim { border-radius: 14px; padding: 11px 18px; }
+  & #duzenListe { margin: 4px 0 6px; }
+}
+
+/* ---- Masaüstü ve tablet (geniş ekran): başlık zeminle birleşir, paneller ve çizim alanı ayrı kartlardır ---- */
+@media screen and (min-width: 901px) and (min-height: 521px) {
+  html:not([data-duzen=klasik]) {
+    & body > header { height: 56px; padding: 0 12px 0 16px; background: transparent; border-bottom: 0; }
+    & .logo { width: 30px; height: 30px; border-radius: 9px; box-shadow: var(--golge-1); }
+    & #projeAd { height: 34px; padding: 0 10px; font-size: 14px; }
+    & #projeAd:hover { background: color-mix(in srgb, var(--yazi) 6%, transparent); }
+    /* Başlık düğmeleri çerçevesizdir; üstüne gelince zemin belirir. Ana işlem (Görsel al) dolu kalır. */
+    & body > header .arac button { min-height: 34px; border-radius: 10px; }
+    & body > header .arac button:not(.ana) { border-color: transparent; background: transparent; }
+    & body > header .arac button:not(.ana):hover:not(:disabled) { border-color: transparent; background: color-mix(in srgb, var(--yazi) 8%, transparent); }
+    & body > header .arac .grup button { margin-left: 0; border-radius: 10px; }
+    & body > header .arac button.ikon { width: 34px; }
+    & body > header .menu button { min-height: 36px; border-radius: 9px; }
+    & body > header .menu button:hover:not(:disabled) { background: var(--panel-2); }
+    & #vitrinCubuk button:not(.ana) { background: var(--panel); min-height: 34px; }
+    & .ayrac { height: 22px; margin: 0 2px; }
+
+    & main { gap: 10px; padding: 0 10px 10px; grid-template-columns: 308px 1fr 296px; }
+    & body.vitrin main { grid-template-columns: 308px 1fr; }
+    & #sol, & #sag { border: 1px solid var(--cam-cizgi); border-radius: 16px; box-shadow: var(--golge-1); }
+    & #orta { border: 1px solid var(--cam-cizgi); border-radius: 16px; box-shadow: var(--golge-1); }
+    & #tuval, & #fotoCanli, & #fotoIz { border-radius: 15px; }
+    & body.sunum main { gap: 0; padding: 0; grid-template-columns: 1fr; }
+    & body.sunum #orta { border: 0; border-radius: 0; box-shadow: none; }
+    & body.sunum #tuval { border-radius: 0; }
+
+    & .alan input[type=number], & .alan input[type=text], & .alan select, & .satirDuzen input, & .satirDuzen select { height: 32px; }
+    & #katalogAra { height: 36px; }
+  }
+}
+/* Orta genişlik (küçük dizüstü, yatay tablet): paneller daralır */
+@media screen and (min-width: 901px) and (max-width: 1120px) and (min-height: 521px) {
+  html:not([data-duzen=klasik]) {
+    & main { grid-template-columns: 280px 1fr 268px; }
+    & body.vitrin main { grid-template-columns: 280px 1fr; }
+    & body.sunum main { grid-template-columns: 1fr; }
+  }
+}
+/* Arama kutusu yalnızca geniş başlıkta uzun hap biçimindedir (dar başlıkta zaten simgeye iner) */
+@media screen and (min-width: 1361px) {
+  html:not([data-duzen=klasik]) {
+    & body > header #paletAc, & body > header #paletAc:hover:not(:disabled) { min-width: 250px; padding: 0 6px 0 13px; border: 1px solid var(--cizgi); border-radius: 999px; background: var(--panel); box-shadow: var(--golge-1); }
+    & body > header #paletAc:hover:not(:disabled) { border-color: var(--cizgi-koyu); }
+  }
+}
+
+/* ---- Telefon ve dar ekran ---- */
+@media screen and (max-width: 900px), screen and (max-height: 520px) {
+  html:not([data-duzen=klasik]) {
+    & body > header .arac button:not(.ana) { border-color: transparent; background: transparent; }
+    & body > header .arac .grup button { margin-left: 0; border-radius: 10px; }
+    & #sol, & #sag { border-radius: 22px 22px 0 0; }
+    /* Alt çubuk: seçili bölümün simgesi hap içinde durur, üstteki çizgi kalkar */
+    & #altGezinme .ik { box-sizing: border-box; width: 54px; height: 30px; padding: 4.5px 16.5px; border-radius: 999px; transition: background-color .15s; }
+    & #altGezinme button { gap: 2px; padding-top: 5px; }
+    & #altGezinme button[aria-current] .ik, & #altGezinme button[aria-pressed=true] .ik { background: var(--vurgu-acik); }
+    & #altGezinme button[aria-current] { color: var(--vurgu-koyu); }
+    & #altGezinme button[aria-current]::before { display: none; }
+  }
+}
+/* Yan yatmış telefon: alt çubuk sola geçer, simge kutusu küçülür */
+@media screen and (orientation: landscape) and (max-height: 520px) {
+  html:not([data-duzen=klasik]) {
+    & #altGezinme .ik { width: 44px; height: 26px; padding: 3.5px 12.5px; }
+  }
+}

@@ -8,13 +8,14 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="ARTAPP">
-  <script>window.ARTAPP_SUNUCUSUZ = true;</script>
+  <script>window.ARTAPP_SUNUCUSUZ = true; window.ARTAPP_SURUM = '23.11.2026 00:22';</script>
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="simge.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="simge-180.png">
   <link rel="stylesheet" href="css/stil.css">
+  <link rel="stylesheet" href="css/duzen.css">
   <link rel="stylesheet" href="css/kagit.css">
-  <script>try { var t = localStorage.getItem('kurgu.tema.v1'), r = { gece: '#17191e', lacivert: '#121a30', kum: '#fffdf9', mavi: '#ffffff' }; if (t === 'koyu') t = 'gece'; if (r[t]) { document.documentElement.dataset.tema = t; document.querySelector('meta[name=theme-color]').content = r[t]; } } catch (e) {}</script>
+  <script>try { var t = localStorage.getItem('kurgu.tema.v1'), r = { gece: '#17191e', lacivert: '#121a30', kum: '#fffdf9', mavi: '#ffffff' }; if (t === 'koyu') t = 'gece'; if (r[t]) { document.documentElement.dataset.tema = t; document.querySelector('meta[name=theme-color]').content = r[t]; } if (localStorage.getItem('kurgu.duzen.v1') === 'klasik') document.documentElement.dataset.duzen = 'klasik'; } catch (e) {}</script>
   <script type="importmap">
   { "imports": {
       "three": "./vendor/three/three.module.js",
@@ -36,6 +37,8 @@
     <symbol id="i-nokta" viewBox="0 0 16 16"><circle cx="3.5" cy="8" r=".6"/><circle cx="8" cy="8" r=".6"/><circle cx="12.5" cy="8" r=".6"/></symbol>
     <symbol id="i-oynat" viewBox="0 0 16 16"><path d="M5 3.5v9l7-4.5z"/></symbol>
     <symbol id="i-aktar" viewBox="0 0 16 16"><path d="M8 2.5v7M5 6.5l3 3 3-3M3 11v1.5a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V11"/></symbol>
+    <symbol id="i-goz" viewBox="0 0 16 16"><path d="M1.8 8s2.3-4.2 6.2-4.2S14.2 8 14.2 8s-2.3 4.2-6.2 4.2S1.8 8 1.8 8z"/><circle cx="8" cy="8" r="1.9"/></symbol>
+    <symbol id="i-paylas" viewBox="0 0 16 16"><circle cx="4" cy="8" r="1.8"/><circle cx="12" cy="3.8" r="1.8"/><circle cx="12" cy="12.2" r="1.8"/><path d="M5.6 7.2l4.8-2.6M5.6 8.8l4.8 2.6"/></symbol>
     <symbol id="i-yukle" viewBox="0 0 16 16"><path d="M8 10V3M5 6l3-3 3 3M3 11v1.5a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1V11"/></symbol>
     <symbol id="i-kaydet" viewBox="0 0 16 16"><path d="M3 3.5a1 1 0 0 1 1-1h6.5L13 5v7.5a1 1 0 0 1-1 1H4a1 1 0 0 1-1-1z"/><path d="M5.5 2.5V6h4V2.5M5.5 13.5V9.5h5v4"/></symbol>
     <symbol id="i-ornek" viewBox="0 0 16 16"><path d="M2.5 13.5V7l5.5-4 5.5 4v6.5z"/><path d="M6.5 13.5V10h3v3.5"/></symbol>
@@ -60,6 +63,13 @@
   <header>
     <div class="marka"><img class="logo" src="simge.svg" alt="" width="28" height="28"><strong>ART<span>APP</span></strong></div>
     <input id="projeAd" aria-label="Proje adı" spellcheck="false" title="Proje adı (değiştirmek için tıklayın)">
+    <div id="vitrinCubuk" role="toolbar" aria-label="Müşteri gösterimi">
+      <span class="vt-etiket">Müşteri gösterimi</span>
+      <button data-vt="acik" class="vt-genis" aria-pressed="false" title="Kapaklar ve kapılar açık, çekmeceler çekilmiş gösterilir"><svg class="ik" aria-hidden="true"><use href="#i-modul"/></svg><span>Kapakları aç</span></button>
+      <button data-vt="aksam" class="vt-genis" aria-pressed="false" title="Gün ışığı kısılır, lambalar yanar"><svg class="ik" aria-hidden="true"><use href="#i-ay"/></svg><span>Akşam</span></button>
+      <button data-vt="foto" class="vt-genis" aria-pressed="false" title="Ekrandaki bakış fotoğraf gibi çizilir; kamerayı oynatınca yeniden çekilir"><svg class="ik" aria-hidden="true"><use href="#i-kamera"/></svg><span>Fotoğraf</span></button>
+      <button data-vt="cik" class="ana" title="Çizime döner (Esc)">Gösterimden çık</button>
+    </div>
     <div class="arac">
       <div class="grup">
         <button id="geri" class="ikon" title="Geri al (Ctrl+Z)" aria-label="Geri al"><svg class="ik" aria-hidden="true"><use href="#i-geri"/></svg></button>
@@ -82,6 +92,7 @@
           <button class="yalniz-dar" data-tikla="dosyaAc" role="menuitem"><svg class="ik" aria-hidden="true"><use href="#i-sunum"/></svg>Sunum PDF</button>
           <button class="yalniz-telefon" data-tikla="gorsel" role="menuitem"><svg class="ik" aria-hidden="true"><use href="#i-kamera"/></svg>Görsel al</button>
           <hr class="yalniz-dar">
+          <button id="vitrinAc" role="menuitem" title="Müşterinin yanında: çizim kilitlenir, yalnızca bakış, renk ve kapak seçimi, kapakları açma, akşam ışığı ve fotoğraf kalır"><svg class="ik" aria-hidden="true"><use href="#i-goz"/></svg>Müşteri gösterimi</button>
           <button id="sunumAc" role="menuitem" title="Paneller gizlenir, çizim tam ekran olur ve kamera kendiliğinden döner"><svg class="ik" aria-hidden="true"><use href="#i-oynat"/></svg>Sunum modu</button>
           <button id="kesimAc" role="menuitem" title="Dolapların levha parçaları: ölçü, adet, malzeme, kenar bandı"><svg class="ik" aria-hidden="true"><use href="#i-cetvel"/></svg>Kesim listesi</button>
           <button id="planAc" role="menuitem" title="Kesim listesindeki parçaları levhalara yerleştirir: levha çizimleri, levha sayısı, doluluk"><svg class="ik" aria-hidden="true"><use href="#i-levha"/></svg>Kesim planı</button>
@@ -99,6 +110,7 @@
           <hr>
           <button id="ac" role="menuitem"><svg class="ik" aria-hidden="true"><use href="#i-yukle"/></svg>Dosyadan aç</button>
           <button id="indir" role="menuitem"><svg class="ik" aria-hidden="true"><use href="#i-kaydet"/></svg>Dosyaya kaydet</button>
+          <button id="paylas" role="menuitem" title="Projeyi dosya olarak gönderir: telefonda paylaşma menüsü açılır (WhatsApp, e-posta); bilgisayarda dosya indirilir. Öbür cihazda “Dosyadan aç” ile açılır"><svg class="ik" aria-hidden="true"><use href="#i-paylas"/></svg>Paylaş</button>
           <button id="ornek" role="menuitem"><svg class="ik" aria-hidden="true"><use href="#i-ornek"/></svg>Örnek mutfak</button>
           <hr>
           <button id="standartKisayol" role="menuitem"><svg class="ik" aria-hidden="true"><use href="#i-ayar"/></svg>Atölye standartları ve firma</button>
@@ -106,7 +118,7 @@
           <button id="yardimAc" role="menuitem"><svg class="ik" aria-hidden="true"><use href="#i-yardim"/></svg>Yardım ve kısayollar</button>
         </div>
       </div>
-      <input id="dosya" type="file" accept=".json,application/json" hidden>
+      <input id="dosya" type="file" accept=".json,.txt,application/json,text/plain" hidden>
     </div>
   </header>
 
@@ -220,6 +232,9 @@
     <button data-sayfa="oda"><svg class="ik" aria-hidden="true"><use href="#i-oda"/></svg><span>Oda</span></button>
     <button data-sayfa="gorunum"><svg class="ik" aria-hidden="true"><use href="#i-renk"/></svg><span>Görünüm</span></button>
     <button data-sayfa="ozellik"><svg class="ik" aria-hidden="true"><use href="#i-ayar"/></svg><span>Özellikler</span></button>
+    <button data-vt="acik" class="yalniz-vitrin" aria-pressed="false"><svg class="ik" aria-hidden="true"><use href="#i-modul"/></svg><span>Kapaklar</span></button>
+    <button data-vt="aksam" class="yalniz-vitrin" aria-pressed="false"><svg class="ik" aria-hidden="true"><use href="#i-ay"/></svg><span>Akşam</span></button>
+    <button data-vt="foto" class="yalniz-vitrin" aria-pressed="false"><svg class="ik" aria-hidden="true"><use href="#i-kamera"/></svg><span>Fotoğraf</span></button>
   </nav>
 
   <div id="teknik" hidden>
@@ -263,9 +278,11 @@
 
   <dialog id="temaPencere">
     <form method="dialog">
-      <h2>Arayüz teması</h2>
+      <h2>Arayüz teması ve düzeni</h2>
       <p class="ipucu">Tıkladığınız tema hemen uygulanır ve bu cihazda hatırlanır. Çizimleriniz, teknik çizim ve çıktılar değişmez.</p>
       <div class="temaIzgara" id="temaListe"></div>
+      <p class="ipucu kisa"><b>Düzen.</b> Yeni düzende paneller ve çizim alanı ayrı kartlardır, başlık düğmeleri çerçevesizdir. Klasik düzen önceki görünümdür; renk teması iki düzende de geçerlidir.</p>
+      <div class="secici" id="duzenListe"></div>
       <div class="dugmeler"><button value="kapat">Kapat</button></div>
     </form>
   </dialog>
@@ -479,6 +496,20 @@
   </dialog>
 
   <script type="module" src="js/ana.js"></script>
-<script>if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(function () {});</script>
+<script>
+if ('serviceWorker' in navigator) (function () {
+  var vardi = !!navigator.serviceWorker.controller; // false: ilk kurulum (bildirim gerekmez)
+  navigator.serviceWorker.register('sw.js').catch(function () {});
+  navigator.serviceWorker.addEventListener('controllerchange', function () {
+    if (!vardi) { vardi = true; return; }
+    if (document.getElementById('surumBildirim')) return;
+    var b = document.createElement('button');
+    b.id = 'surumBildirim'; b.type = 'button'; b.textContent = 'Yeni sürüm indirildi. Geçmek için dokunun.';
+    b.style.cssText = 'position:fixed;left:50%;top:calc(10px + env(safe-area-inset-top));transform:translateX(-50%);z-index:90;min-height:40px;padding:0 18px;border:0;border-radius:999px;background:var(--vurgu);color:var(--vurgu-yazi);font-weight:600;box-shadow:var(--golge-3);max-width:92vw;white-space:normal';
+    b.onclick = function () { location.reload(); };
+    document.body.appendChild(b);
+  });
+})();
+</script>
 </body>
 </html>

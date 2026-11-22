@@ -283,6 +283,10 @@ function gorunurluk() {
   }
 }
 
+// Müşteri gösterimi: çizim kilitlenir. Dokunma ve tıklama yalnızca görüşü çevirir; modül seçilmez, taşınmaz, yerleştirilmez.
+let saltOkunur = false;
+export function saltOku(acik) { saltOkunur = !!acik; if (saltOkunur) { surukle = null; controls.enabled = true; } }
+
 // Sunum modu: kamera odanın çevresinde kendiliğinden döner
 export function sunum(acik) {
   controls.autoRotate = acik;
@@ -1174,6 +1178,7 @@ const parmak = new Set(); // ekrana değen parmaklar (pointerId)
 function bas(e) {
   if (renderde) return;
   if (e.button !== 0) return;
+  if (saltOkunur) { surukle = null; return; }
   const dokun = e.pointerType === 'touch';
   if (dokun && parmak.size > 1) { surukle = null; return; } // ikinci parmak: görüş hareketi, seçim ya da taşıma yok
   if (noktaAlici) { const n = duvarNoktasi(e); if (n) noktaAlici(n); surukle = null; return; }

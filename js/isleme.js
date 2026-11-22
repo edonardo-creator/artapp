@@ -20,7 +20,10 @@
 //   baza ayağı delikleri: arşivde kapalıdır (ARE_PLINTH_LEG_HOLES_AVAILABLE nil); ARTAPP'te de yoktur.
 //   arkalık kanalı (Adeko GROOVES ve BACK_PANEL ayarları): yan panellerin iç yüzünde, alt tablanın üst ve üst tablanın alt yüzünde;
 //     arka kenardan 11,5 mm içeride, arkalık kalınlığı + 0,5 mm geniş (8 mm arkalıkta 8,5), 8 mm derin. Ölçüler atölye standartlarındadır (moduller.js);
-//     kanal, çizimde arkalığın levhaya girdiği yerden hesaplanır. Arkalık çakma seçilirse ya da gövde L köşe / kavisliyse kanal açılmaz.
+//     kanal, çizimde arkalığın levhaya girdiği yerden hesaplanır. Arkalık çakma seçilirse kanal açılmaz.
+//     L köşe dolabında iki kol ayrı ayrı işlenir (B kolu çeyrek tur döndürülüp düz gövde gibi okunur): iki arkalığın kanalları,
+//     iki yan panelin birleşim delikleri ve raf pimleri, iki kapağın kulp delikleri. Kavisli dolapta yan panelin kanalı açılır;
+//     kavisli tablalar şablonla kesildiği için föyde yoktur (kanalı elde açılır, kesim listesindeki not).
 import { TANIM, parcalar, T, ARK } from './moduller.js';
 import { yatayBoyEkseni } from './ortak.js';
 import { kulpBilgisi } from './kulplar.js';
@@ -59,6 +62,32 @@ export function modulIslemleri(m, kural) {
   const t = TANIM[m.tip];
   if (!t || !['alt', 'ust', 'boy'].includes(t.sinif)) return [];
   const R = kural || { ...ISLEME_KURAL, ...cihazVarsayilani }, ps = parcalar(m).filter(q => !q.sus && !q.sekil && Number.isFinite(q.sx));
+  if (!String(m.tip).endsWith('_lkose')) return govdeIslemleri(m, R, ps, false).map(sade);
+  // L köşe: A kolu (duvar boyunca, ön yüzü +z) olduğu gibi işlenir. B kolu için bütün parçalar düşey eksen çevresinde çeyrek tur
+  // döndürülür: B kolunun duvarı z' = 0, önü z' = kol derinliği, yan paneli düz gövdenin yan paneli olur. Her parça bir kez raporlanır:
+  // B kolunun yan paneli, tablaları, rafları ve kapağı B okumasından; ötekiler A okumasından. B kolundaki arkalığın A kolundaki
+  // tablaya açtığı kanal, köşeleri gerçek koordinata çevrilerek A okumasındaki parçaya eklenir.
+  const sag = m.korYon === 'sag';
+  const don = q => sag ? { ...q, x: q.z, z: m.w - q.x - q.sx, sx: q.sz, sz: q.sx } : { ...q, x: m.d - q.z - q.sz, z: q.x, sx: q.sz, sz: q.sx };
+  const geri = n => sag ? { x: m.w - n.z, y: n.y, z: n.x } : { x: n.z, y: n.y, z: m.d - n.x };
+  const A = govdeIslemleri(m, R, ps, true), B = govdeIslemleri({ ...m, w: m.d, d: m.w }, R, ps.map(don), true);
+  return A.map((PA, i) => {
+    const PB = B[i];
+    const bKolu = PA.malzeme === 'Kapak' ? PA.eks === 'x' : PA.eks === 'z' || (PA.eks === 'y' && PA.q.z > 100);
+    if (bKolu) return sade(PB);
+    if (PA.eks === 'y') for (const [a, b, der] of PB.kanalHam || []) {
+      const [xa, ya] = yerel(PA, geri(a)), [xb, yb] = yerel(PA, geri(b));
+      PA.islem.push({ t: 'kanal', x0: Math.max(0, Math.min(xa, xb)), y0: Math.max(0, Math.min(ya, yb)), x1: Math.min(PA.boy, Math.max(xa, xb)), y1: Math.min(PA.en, Math.max(ya, yb)), der: yuv(der), ac: 'arkalık kanalı' });
+    }
+    return sade(PA);
+  });
+}
+// modül koordinatındaki noktayı parçanın yüzündeki (x, y)'ye çevirir
+const yerel = (P, n) => { const x = n[P.u] - P.q[P.u]; let y = n[P.v] - P.q[P.v]; if (P.ters) y = P.q['s' + P.v] - y; return [yuv(x), yuv(y)]; };
+const sade = P => ({ ad: P.ad, malzeme: P.malzeme, boy: P.boy, en: P.en, kalinlik: P.kalinlik, yuz: P.yuz, kose: P.kose, alin: P.alin || 0, alinKavela: P.alinKavela || 0,
+  islem: P.islem.sort((a, b) => (a.t > b.t ? 1 : a.t < b.t ? -1 : 0) || (a.x ?? a.x0) - (b.x ?? b.x0) || (a.y ?? a.y0 ?? 0) - (b.y ?? b.y0 ?? 0)) });
+// Bir gövdenin (ya da L köşenin bir kolunun) işlemleri. lk: L köşe okuması (yalnızca bu kola bakan kapak ve kulp işlenir).
+function govdeIslemleri(m, R, ps, lk) {
   const paneller = [];
   for (const q of ps) {
     if (q.mat !== 'govde' && q.mat !== 'kapak') continue;
@@ -110,6 +139,7 @@ export function modulIslemleri(m, kural) {
   const delik = (P, n, cap, der, ac) => { const [x, y] = yerel(P, n); if (x < -0.5 || y < -0.5 || x > P.boy + 0.5 || y > P.en + 0.5) return; P.islem.push({ t: 'delik', x, y, cap, der, ac }); };
   const dokunur = (a, b) => Math.abs(a - b) < 1.6;
   for (const [P, a, b, der] of kanallar) {
+    (P.kanalHam || (P.kanalHam = [])).push([a, b, der]); // L köşede öbür kolun okumasına aktarmak için (modül koordinatında)
     const [xa, ya] = yerel(P, a), [xb, yb] = yerel(P, b);
     P.islem.push({ t: 'kanal', x0: Math.max(0, Math.min(xa, xb)), y0: Math.min(ya, yb), x1: Math.min(P.boy, Math.max(xa, xb)), y1: Math.max(ya, yb), der: yuv(der), ac: 'arkalık kanalı' });
   }
@@ -154,7 +184,7 @@ export function modulIslemleri(m, kural) {
     for (const z of L < 140 ? [z0 + L / 2] : noktalar(z0, z1).vida) delik(H, { x: S.q.x + S.q.sx / 2, y: 0, z }, R.vidaCap, 0, 'vida: ' + S.ad.toLocaleLowerCase('tr'));
   }
   // 2) Menteşe yuvası (kapak) ve menteşe tabanı (yan panel)
-  for (const K of paneller.filter(P => P.malzeme === 'Kapak')) {
+  for (const K of paneller.filter(P => P.malzeme === 'Kapak' && (!lk || P.eks === 'z'))) {
     const yon = K.q.mentese;
     if (yon !== 'sol' && yon !== 'sag' || K.q.onBagli) continue;
     const n = menteseSayisi(K.q.sy), uc = Math.min(R.yuvaUc, K.q.sy * 0.2), kenarX = yon === 'sol' ? K.q.x : K.q.x + K.q.sx;
@@ -170,7 +200,9 @@ export function modulIslemleri(m, kural) {
   const kulpKod = m.kulp || 'cubuk';
   if (!['gola', 'yok', 'boy', 'tir'].includes(kulpKod)) for (const k of ps.filter(q => q.tur === 'kulp' && q.mat === 'kulp' && !q.kulpEk)) {
     const cx = k.x + k.sx / 2, cy = k.y + k.sy / 2;
-    const K = paneller.filter(P => P.malzeme === 'Kapak' && cx > P.q.x - 1 && cx < P.q.x + P.q.sx + 1 && cy > P.q.y - 1 && cy < P.q.y + P.q.sy + 1).sort((a, b) => a.q.sx * a.q.sy - b.q.sx * b.q.sy)[0];
+    // L köşede kulp yalnızca bu kolun önündeki kapağa işlenir (öbür kolun kulbu yandan bakınca bu kapağın hizasına düşebilir)
+    const K = paneller.filter(P => P.malzeme === 'Kapak' && cx > P.q.x - 1 && cx < P.q.x + P.q.sx + 1 && cy > P.q.y - 1 && cy < P.q.y + P.q.sy + 1
+      && (!lk || (P.eks === 'z' && k.z < P.q.z + P.q.sz + 60 && k.z + k.sz > P.q.z - 60))).sort((a, b) => a.q.sx * a.q.sy - b.q.sx * b.q.sy)[0];
     if (!K) continue;
     const dikey = k.sy > k.sx, uzun = Math.max(k.sx, k.sy), bilgi = kulpBilgisi(kulpKod), yazili = Number(/(\d{2,4})\s*mm/.exec(bilgi?.ad || '')?.[1]) || 0;
     const tek = kulpKod === 'dug' || bilgi?.bicim === 'knob' || uzun < 60;
@@ -197,8 +229,7 @@ export function modulIslemleri(m, kural) {
     const zf = S.q.z + S.q.sz;
     for (const z of R.rayAralik > 0 ? [zf - R.rayOn, zf - R.rayOn - R.rayAralik] : [zf - R.rayOn]) if (z > Math.max(c.z, S.q.z) + 5) delik(S, { x: 0, y: on.y + R.rayYuk, z }, R.rayCap, R.rayDerin, 'ray vidası (işaret)');
   }
-  return paneller.map(P => ({ ad: P.ad, malzeme: P.malzeme, boy: P.boy, en: P.en, kalinlik: P.kalinlik, yuz: P.yuz, kose: P.kose, alin: P.alin || 0, alinKavela: P.alinKavela || 0,
-    islem: P.islem.sort((a, b) => (a.t > b.t ? 1 : a.t < b.t ? -1 : 0) || (a.x ?? a.x0) - (b.x ?? b.x0) || (a.y ?? a.y0 ?? 0) - (b.y ?? b.y0 ?? 0)) }));
+  return paneller;
 }
 
 // Parçanın işlemlerinin kısa özeti: "8 delik Ø5 · 2 yuva Ø35 · 1 kertme"

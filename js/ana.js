@@ -225,11 +225,11 @@ const ESIT_METIN = {
   bagli: 'Projeler ortak: ARTAPP’in çalıştığı bilgisayarda saklanır ve aynı ağdaki bütün cihazlarda aynı liste görünür. Her değişiklik kendiliğinden kaydedilir.',
   yok: 'Ortak depoya şu an ulaşılamıyor. Değişiklikler bu cihazda saklanıyor; bağlantı gelince kendiliğinden eşitlenecek.',
   bilinmiyor: 'Projeler her değişiklikte kendiliğinden kaydedilir.',
-  cihaz: 'Projeler yalnızca bu cihazda, bu tarayıcıda saklanır; her değişiklik kendiliğinden kaydedilir. Başka cihaza taşımak ya da yedeklemek için “⋯ › Dosyaya kaydet”, öbür cihazda “Dosyadan aç” kullanın.',
+  cihaz: 'Projeler yalnızca bu cihazda, bu tarayıcıda saklanır; her değişiklik kendiliğinden kaydedilir. Başka cihaza taşımak ya da yedeklemek için “⋯ › Paylaş” ya da “Dosyaya kaydet”, öbür cihazda “Dosyadan aç” kullanın.',
 };
 function projelerCiz() {
   if (kayitZamani) simdiKaydet();
-  $('#esitDurum').textContent = ESIT_METIN[esitDurum()];
+  $('#esitDurum').textContent = ESIT_METIN[esitDurum()] + (globalThis.ARTAPP_SURUM ? ` Yayın sürümü: ${globalThis.ARTAPP_SURUM}.` : '');
   $('#esitDurum').dataset.durum = esitDurum();
   const k = kitaplikOku().filter(e => e?.proje?.oda && Array.isArray(e.proje.moduller)).sort((a, b) => b.tarih - a.tarih); // bozuk kayıt listeyi çökertmesin
   $('#projeListe').innerHTML = k.map(e => {
@@ -666,6 +666,7 @@ function olcuNoktasi(n) {
 // Sağ tık menüsü: modülün üstünde modül işlemleri, boş yerde yapıştırma
 // kimlik verilirse ekran noktasına bakılmaz (telefondaki seçim çubuğu); yukari: menü noktanın üstüne açılır
 function sagMenuAc(e, kimlik, yukari = false) {
+  if (vitrinde()) return;
   const id = kimlik === undefined ? sahne.modulKimligi(e) : kimlik, menu = $('#sagMenu');
   if (id && !secililer.has(id)) { secili = id; secililer = new Set([id]); guncelle(); }
   if (!id && !pano.length) { menu.hidden = true; return; }
@@ -1496,9 +1497,9 @@ function paletKomutlari() {
     dugme('yeni', 'Yeni mutfak ya da oda', 'sihirbaz'), dugme('projelerAc', 'Projeler', 'kayıtlı projeleri aç'), dugme('kesimAc', 'Kesim listesi', 'parça ölçüleri, levha, kenar bandı'), dugme('planAc', 'Kesim planı', 'levhaya yerleşim, levha sayısı, fire'), dugme('etiketAc', 'Parça etiketleri', '70 × 70 mm, her parçaya bir etiket'),
     dugme('maliyetAc', 'Hırdavat ve maliyet', 'hırdavat, fiyat, kâr, KDV'), dugme('teklifAc', 'Teklif dosyası', 'müşteri teklifi, metre fiyatı, PDF'), dugme('aksAc', 'Aksesuar kataloğu', 'kiler, çöp kovası, sepet, köşe mekanizması'), dugme('tezgahAc', 'Tezgah kataloğu', 'mermer, taş, kuvars, plaka'), dugme('montajAc', 'Montaj şablonu', 'patlatılmış görünüş, parça ve hırdavat listesi'), dugme('islemeAc', 'İşleme föyü', 'delik, menteşe yuvası, kulp deliği, gola kertmesi'), dugme('dekorAc', 'Sahne dekoru', 'bitki, halı, tablo, tezgah üstü eşya, vitrin ışığı'), dugme('fotoAc', 'Fotoğrafik görüntü', 'ışın izleme, render, fotoğraf'), dugme('renderAc', 'Yüksek kalite görüntü', 'hızlı, yumuşak gölge'),
     dugme('teknikAc', 'Teknik çizim', 'plan, görünüş, liste'), dugme('dosyaAc', 'Sunum PDF', 'müşteri dosyası'), dugme('gorsel', 'Görsel al', 'resim kaydet'),
-    dugme('aktarAc', 'Dışa aktar', 'DXF, AutoCAD, SketchUp'), dugme('sunumAc', 'Sunum modu', 'tam ekran, döner'),
-    dugme('indir', 'Dosyaya kaydet', 'proje dosyası indir'), dugme('ac', 'Dosyadan aç', 'proje dosyası yükle'), dugme('ornek', 'Örnek mutfak'),
-    dugme('standartAc', 'Atölye standartları ve firma bilgisi', 'levha, baza, logo'), dugme('temaDegis', 'Arayüz teması', 'grafit, gece, kum, lacivert, klasik mavi'), dugme('yardimAc', 'Yardım ve kısayollar'),
+    dugme('aktarAc', 'Dışa aktar', 'DXF, AutoCAD, SketchUp'), dugme('sunumAc', 'Sunum modu', 'tam ekran, döner'), dugme('vitrinAc', 'Müşteri gösterimi', 'çizim kilitli; renk, kapak, akşam, fotoğraf'),
+    dugme('indir', 'Dosyaya kaydet', 'proje dosyası indir'), dugme('ac', 'Dosyadan aç', 'proje dosyası yükle'), dugme('paylas', 'Paylaş', 'proje dosyasını WhatsApp ya da e-postayla gönder'), dugme('ornek', 'Örnek mutfak'),
+    dugme('standartAc', 'Atölye standartları ve firma bilgisi', 'levha, baza, logo'), dugme('temaDegis', 'Arayüz teması ve düzeni', 'grafit, gece, kum, lacivert, klasik mavi; yeni ya da klasik düzen'), dugme('yardimAc', 'Yardım ve kısayollar'),
     dugme('geri', 'Geri al', 'Ctrl Z'), dugme('ileri', 'Yinele', 'Ctrl Y'),
     dugme('doldur', 'Boş yerleri doldur', duvarAdi), dugme('bitis', 'Bitiş parçalarını ekle'), dugme('spotDiz', 'Tavana spot diz'),
     dugme('genelHiza', 'Genel yüksekliğe hizala'), dugme('tavan', 'Dolapları tavana tamamla'), dugme('olcuCiz', 'Ölçü çiz', 'iki nokta'),
@@ -1555,6 +1556,43 @@ function gezinmeCiz() {
   document.querySelectorAll('#altGezinme [data-sayfa]').forEach(d => { if (d.dataset.sayfa === acik) d.setAttribute('aria-current', 'page'); else d.removeAttribute('aria-current'); });
 }
 function gosterimKapat() { $('.ust-arac').classList.remove('acik'); $('#gosterimAc').setAttribute('aria-expanded', 'false'); }
+// ---- Müşteri gösterimi (kod adı: vitrin) ----
+// Çizim kilitlenir: seçim, taşıma, silme, ekleme yoktur. Bakış çevrilir; Görünüm panelinden renk, desen ve kapak modeli değiştirilir;
+// kapaklar açılır, akşam ışığı ve fotoğraf kipi açılıp kapanır. Çıkınca ölçü ve görünüm ayarları girişteki haline döner.
+// Renk ve kapak değişiklikleri projeye işlenir (çıkınca Geri al ile geri alınabilir).
+let vitrinOnce = null;
+const vitrinde = () => document.body.classList.contains('vitrin');
+function vitrinCiz() {
+  const durum = { acik: !!gorunum.kapakAcik, aksam: !!gorunum.aksam, foto: !!gorunum.foto };
+  document.querySelectorAll('[data-vt]').forEach(d => { if (d.dataset.vt in durum) d.setAttribute('aria-pressed', String(durum[d.dataset.vt])); });
+}
+function vitrinAyarla(acik) {
+  if (acik === vitrinde()) return;
+  const esitle = (sec, deger) => { if ($(sec).checked !== !!deger) $(sec).click(); };
+  if (acik) {
+    if (bekleyen) yerlestirBitir();
+    if ($('#olcuCiz').classList.contains('aktif')) olcuModu(false);
+    gosterimKapat(); $('#sagMenu').hidden = true;
+    vitrinOnce = { olculer: !!gorunum.olculer, acilis: !!gorunum.acilis, kapakGizle: !!gorunum.kapakGizle, kapakAcik: !!gorunum.kapakAcik, aksam: !!gorunum.aksam, mod: gorunum.foto ? 'foto' : gorunum.mod, sekme: $('#sol').dataset.sekme };
+    if (!gorunum.foto && gorunum.mod !== 'gercek') $('#modSec [data-mod=gercek]').click();
+    esitle('#olculer', false); esitle('#acilis', false); esitle('#kapakGizle', false);
+    secili = null; secililer = new Set();
+    document.body.classList.add('vitrin');
+    sahne.saltOku(true);
+    $('#sol').dataset.sekme = 'gorunum';
+    sayfaAc('cizim');
+    bildir('Müşteri gösterimi: çizim kilitli. Görüntüyü çevirebilir, renk ve kapak modelini değiştirebilirsiniz.', 6000);
+  } else {
+    document.body.classList.remove('vitrin');
+    sahne.saltOku(false);
+    const o = vitrinOnce || {}; vitrinOnce = null;
+    esitle('#olculer', o.olculer); esitle('#acilis', o.acilis); esitle('#kapakGizle', o.kapakGizle); esitle('#kapakAcik', o.kapakAcik); esitle('#aksam', o.aksam);
+    if (o.mod && o.mod !== (gorunum.foto ? 'foto' : gorunum.mod)) $(`#modSec [data-mod=${o.mod}]`).click();
+    $('#sol').dataset.sekme = o.sekme || 'modul';
+    sayfaAc('cizim');
+  }
+  vitrinCiz(); guncelle();
+}
 // Panel tutamağı: sürükleyince yükseklik değişir (çok aşağı: kapanır, çok yukarı: tam boy); dokununca yarım / tam boy
 function tutamakKur(t) {
   let bas = null;
@@ -1601,6 +1639,14 @@ function temaAyarla(kod) {
   temaSahneyeYansit();
   temaPencereCiz();
 }
+// Arayüz düzeni: 'yeni' (varsayılan; css/duzen.css) ya da 'klasik' (2026-11-23 öncesi görünüm). Seçim cihazda saklanır.
+const duzenOku = () => document.documentElement.dataset.duzen === 'klasik' ? 'klasik' : 'yeni';
+function duzenAyarla(kod) {
+  if (kod === 'klasik') document.documentElement.dataset.duzen = 'klasik'; else delete document.documentElement.dataset.duzen;
+  try { localStorage.setItem('kurgu.duzen.v1', kod === 'klasik' ? 'klasik' : 'yeni'); } catch { /* depolama kapalı olabilir */ }
+  window.dispatchEvent(new Event('resize')); // çizim alanının ölçüsü değişir
+  temaPencereCiz();
+}
 // 3B çizimde seçili modülün çerçevesi temanın vurgu rengini alır
 function temaSahneyeYansit() {
   try { sahne.vurguRengi(getComputedStyle(document.documentElement).getPropertyValue('--vurgu').trim() || '#d9480f'); guncelle(); } catch { /* sahne henüz kurulmadıysa sonra yansır */ }
@@ -1611,6 +1657,9 @@ function temaPencereCiz() {
   l.innerHTML = TEMALAR.map(([kod, ad, aciklama, panel, zemin, yazi, vurgu]) => `<button type="button" class="temaKart${kod === secili ? ' secili' : ''}" data-tema-sec="${kod}"${kod === secili ? ' aria-pressed="true"' : ''}>
       <span class="temaOn" style="background:${zemin}" aria-hidden="true"><span><i style="background:${yazi};opacity:.75;width:60%"></i><i style="background:${panel}"></i><i style="background:${vurgu}"></i></span><span style="background:${panel};border:1px solid ${vurgu}"></span></span>
       <b>${ad}${kod === 'grafit' ? ' (varsayılan)' : ''}</b><small>${aciklama}</small></button>`).join('');
+  const d = duzenOku();
+  if ($('#duzenListe')) $('#duzenListe').innerHTML = [['yeni', 'Yeni düzen'], ['klasik', 'Klasik düzen']].map(([kod, ad]) =>
+    `<button type="button" data-duzen-sec="${kod}" class="${kod === d ? 'aktif' : ''}"${kod === d ? ' aria-pressed="true"' : ''}>${ad}</button>`).join('');
 }
 
 function duvarCiz(uy) {
@@ -2012,6 +2061,17 @@ function olaylar() {
   };
   $('#sunumAc').onclick = () => sunumAyarla(true);
   $('#sunumCik').onclick = () => sunumAyarla(false);
+  $('#vitrinAc').onclick = () => vitrinAyarla(true);
+  document.addEventListener('click', e => { // müşteri gösterimi düğmeleri (başlıkta ve telefonda alt çubukta)
+    const d = e.target.closest?.('[data-vt]');
+    if (!d || !vitrinde()) return;
+    const is = d.dataset.vt;
+    if (is === 'cik') { vitrinAyarla(false); return; }
+    if (is === 'acik') $('#kapakAcik').click();
+    else if (is === 'aksam') $('#aksam').click();
+    else if (is === 'foto') $(`#modSec [data-mod=${gorunum.foto ? 'gercek' : 'foto'}]`).click();
+    vitrinCiz();
+  });
   document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && document.body.classList.contains('sunum')) sunumAyarla(false); });
   // Dar ekran: seçili modül çubuğu ve açık panelleri çizime dokununca kapatma
   $('#secimCubugu').addEventListener('click', e => {
@@ -2132,17 +2192,45 @@ function olaylar() {
   $('#ornek').onclick = () => { if (confirm('Mevcut çizimin yerine örnek mutfak açılacak. Devam edilsin mi?')) { degistir(() => { P = ornekProje(); secili = null; }); sahne.kamera('3b'); } };
   $('#indir').onclick = () => indir(new Blob([JSON.stringify(P, null, 2)], { type: 'application/json' }), dosyaAdi('json'));
   $('#ac').onclick = () => $('#dosya').click();
-  $('#dosya').addEventListener('change', async e => {
-    const f = e.target.files[0];
-    e.target.value = '';
-    if (!f) return;
+  const projeDosyasiAc = async f => {
     try {
+      if (f.size > 20 * 1024 * 1024) throw new Error('büyük');
       const p = JSON.parse(await f.text());
       if (p.surum !== 1 || !Array.isArray(p.moduller) || !p.oda) throw new Error('biçim');
       degistir(() => { P = { ...bosProje(), ...p, id: yeniKimlik() }; secili = null; }); // dosyadan açılan proje ayrı kayıt olur
       sahne.kamera('3b');
+      bildir(`“${P.ad || 'Proje'}” açıldı ve Projeler listesine ayrı bir proje olarak eklendi.`);
     } catch { alert('Bu dosya bir proje dosyası olarak okunamadı.'); }
+  };
+  $('#dosya').addEventListener('change', e => { const f = e.target.files[0]; e.target.value = ''; if (f) projeDosyasiAc(f); });
+  // Proje dosyasını pencereye sürükleyip bırakmak "Dosyadan aç" ile aynıdır (dosya seçme alanına bırakılan dosya o alana gider)
+  const dosyaSuruklemesi = e => [...(e.dataTransfer?.types || [])].includes('Files');
+  window.addEventListener('dragover', e => { if (dosyaSuruklemesi(e)) { e.preventDefault(); e.dataTransfer.dropEffect = 'copy'; } });
+  window.addEventListener('drop', e => {
+    if (!dosyaSuruklemesi(e) || e.target?.matches?.('input[type=file]')) return;
+    e.preventDefault(); // tarayıcı dosyayı sayfanın yerine açmasın
+    if (!$('#teknik').hidden || document.querySelector('dialog[open]')) { bildir('Proje dosyasını açmak için önce açık pencereyi kapatın.'); return; }
+    const f = [...e.dataTransfer.files].find(d => /\.(json|txt)$/i.test(d.name));
+    if (f) projeDosyasiAc(f); else bildir('Buraya yalnızca ARTAPP proje dosyası (.json ya da .txt) bırakılabilir.');
   });
+  // Paylaş: projeyi dosya olarak cihazın paylaşma menüsüne verir (WhatsApp, e-posta…); paylaşma menüsü olmayan cihazda dosya indirilir.
+  // Paylaşılan dosya .txt uzantılıdır: tarayıcılar .json dosyasının paylaşılmasına izin vermez. İçerik "Dosyaya kaydet" ile aynıdır.
+  $('#paylas').onclick = async () => {
+    const metin = JSON.stringify(P), ad = dosyaAdi('json').replace(/\.json$/, '.artapp.txt');
+    let dosya = null;
+    try { dosya = new File([metin], ad, { type: 'text/plain' }); } catch { /* File desteklenmiyorsa indirilir */ }
+    let paylasilir = false;
+    try { paylasilir = !!(dosya && navigator.share && navigator.canShare?.({ files: [dosya] })); } catch { paylasilir = false; }
+    if (paylasilir) {
+      try {
+        await navigator.share({ files: [dosya], title: P.ad || 'ARTAPP projesi' });
+        bildir('Proje dosyası paylaşıldı. Öbür cihazda “⋯ › Dosyadan aç” ile açılır.', 7000);
+        return;
+      } catch (h) { if (h?.name === 'AbortError') return; /* paylaşma başarısız: aşağıda indirilir */ }
+    }
+    indir(new Blob([JSON.stringify(P, null, 2)], { type: 'application/json' }), dosyaAdi('json'));
+    bildir('Proje dosyası indirildi. Dosyayı WhatsApp ya da e-postayla gönderebilirsiniz; öbür cihazda “⋯ › Dosyadan aç” ile açılır.', 8000);
+  };
   $('#gorsel').onclick = async () => {
     if (canliResim()) { $('#fotoCanli').toBlob(b => { if (b) indir(b, dosyaAdi('png').replace(/\.png$/, '-foto.png')); }, 'image/png'); return; } // Foto kipinde ekrandaki fotoğraf
     const onceki = secili; secili = null; guncelle();
@@ -2188,6 +2276,7 @@ function olaylar() {
   $('#standartKisayol').onclick = () => standartAc();
   $('#temaDegis').onclick = () => { temaPencereCiz(); if (!$('#temaPencere').open) $('#temaPencere').showModal(); };
   $('#temaListe').addEventListener('click', e => { const b = e.target.closest('[data-tema-sec]'); if (b) temaAyarla(b.dataset.temaSec); });
+  $('#duzenListe').addEventListener('click', e => { const b = e.target.closest('[data-duzen-sec]'); if (b) duzenAyarla(b.dataset.duzenSec); });
   $('#paletAc').onclick = paletAc;
   $('#paletAra').addEventListener('input', () => { paletSecili = 0; paletCiz(); });
   $('#paletAra').addEventListener('keydown', e => {
@@ -2214,6 +2303,13 @@ function olaylar() {
   document.addEventListener('pointerdown', e => { if (!e.target.closest('#sagMenu') && e.target.id !== 'tuval') $('#sagMenu').hidden = true; });
 
   document.addEventListener('keydown', e => {
+    if (vitrinde()) { // müşteri gösterimi: yalnızca bakış kısayolları (1–5) ve Esc çalışır; çizim kısayolları kapalıdır
+      const yaz = ['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement?.tagName), pencere = document.querySelector('dialog[open]');
+      if (e.key === 'Escape' && !pencere) { vitrinAyarla(false); return; }
+      if (!yaz && !pencere && !e.ctrlKey && !e.metaKey && !e.altKey && ['1', '2', '3', '4', '5'].includes(e.key)) sahne.kamera(['3b', 'ic', 'on', 'sol', 'ust'][Number(e.key) - 1]);
+      if (!yaz && (e.ctrlKey || e.metaKey) && ['k', 'z', 'y', 'd', 'a', 'v'].includes(e.key.toLowerCase())) e.preventDefault();
+      return;
+    }
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); paletAc(); return; }
     if ($('#palet').open) return; // palet açıkken çizim kısayolları çalışmasın
     const yazi = ['INPUT', 'SELECT', 'TEXTAREA'].includes(document.activeElement?.tagName);
@@ -2252,7 +2348,7 @@ function renkCanli(el) {
   if (a.startsWith('renk.')) { P.renk[a.slice(5)] = el.value; if (a === 'renk.tezgah') delete P.ayar.tezgahSec; }
   else if (a.startsWith('toplu.')) { for (const m of seciliModuller()) m[a.slice(6)] = el.value; }
   else { const m = seciliModul(); if (m) m[a] = el.value; }
-  sahne.ciz(P, { secili, secililer, uyari: new Set(uyarilar(P).map(u => u.id)), ...gorunum });
+  sahne.ciz(P, { secili, secililer, uyari: vitrinde() ? new Set() : new Set(uyarilar(P).map(u => u.id)), ...gorunum });
 }
 
 function dosyaAdi(uz) {

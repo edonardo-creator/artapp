@@ -20,7 +20,9 @@ export const STANDART_VARSAYILAN = { govde: 18, arkalik: 8, kapak: 18, baza: 150
 // yüksekliği sabit 860 mm idi: baza değiştirilmişse gövde 860 − baza olur.
 export const STANDART_ONCEKI = { ...STANDART_VARSAYILAN, baza: 100, altGovde: 760, altDerin: 560, tezgah: 40, tezgahTasma: 40, bosluk: 2, ustYuk: 700, ustDerin: 320, ustHat: 2200, tac: 50 };
 const ONCEKI_ALT_YUK = 860;
-export const OLCU_SURUM = 2; // yeni projenin ayar.olcu değeri: std içinde eksik alan başlangıç ölçüsünden okunur
+export const OLCU_SURUM = 3; // yeni projenin ayar.olcu değeri. 2: yeni ölçü kuralları (2026-11-22). 3: ayrıca köşe gövdesi kuralı (2026-11-23)
+const YENI_KURAL_SURUM = 2;   // bu sürümden itibaren std içinde eksik alan başlangıç ölçüsünden okunur ve yeni ölçü kuralları geçerlidir
+const KOSE_KURAL_SURUM = 3;   // bu sürümden itibaren L köşe ve kavisli gövdede arkalık kanallıdır, raf hareketli raf ölçüsündedir
 export const STANDART_SINIR = { // [en az, en çok]
   govde: [12, 25], arkalik: [3, 18], kapak: [16, 25], baza: [60, 200], tezgah: [12, 80], tezgahTasma: [20, 80], bosluk: [1, 5], ustKot: [1200, 1800], ustHat: [1900, 2700],
   altGovde: [400, 1000], altDerin: [300, 800], ustYuk: [300, 1200], ustDerin: [200, 600], tac: [20, 200],
@@ -49,6 +51,10 @@ let B = 2;                // kapak boşluğu: kapağın her kenarındaki pay
 // İki kapak arası 2 × boşluk, hareketli raf iç genişlikten 2 mm dar ve gövdeden 20 mm kısa, üç çekmecede 1/2 + 1/4 + 1/4, çekmece kutusu ray boyunda,
 // duvara dayalı dolaplarda baza tek parça (kesim listesi). Eski projeler önceki kurallarla kalır: parça ölçüleri değişmez.
 export let YENI_KURAL = false;
+// Köşe gövdesi kuralı (2026-11-23): L köşe ve kavisli bitiş dolabında arkalık, düz gövdedeki gibi yanların ve tablaların kanalına girer
+// (atölye standardında arkalık kanallıysa) ve raf hareketli raf ölçüsünde kesilir (yanlardan 1 mm dar, önden 20 mm kısa, arkalığa dayalı).
+// Yalnızca ayar.olcu >= 3 olan projelerde etkindir; önceki projelerde köşe gövdesi çakma arkalıklı ve tabla ölçüsünde raflı kalır.
+export let KOSE_KURAL = false;
 // Ray türüne göre çekmece kutusu (yalnızca yeni ölçü kurallarında). Kaynak: atölyenin Adeko kütüphanesindeki ray ayarları
 // (DEFAULT_HELPERS/CEKMECE BLUM TANDEM …, CEKMECE BLUM TANDEMBOX …/DRAWER_DEFAULT: DRAWER_TOTAL_GAP_WID, DRAWER_PANELS_WID_DIFF, DRAWER_PANELS_HEI_DIFF_BOTTOM);
 // teleskopik rayda eB Creator'ın örnek CAM listesindeki ölçü (her yanda 13 mm) korunur: arşivdeki teleskopik kaydı gizli rayın kopyasıdır (toplam 10 mm), teleskopik raya uymaz.
@@ -85,10 +91,10 @@ export function modulKapakStili(m) {
 }
 
 // Verilen standartları (eksik ya da sınır dışı değerlerde varsayılanı) etkin kılar; etkin değerleri döndürür.
-// surum: projenin ayar.olcu değeri. OLCU_SURUM'dan küçükse (eski proje) eksik alanlar önceki ölçülerden okunur.
+// surum: projenin ayar.olcu değeri. 2'den küçükse (eski proje) eksik alanlar önceki ölçülerden okunur; 3'ten küçükse köşe gövdesi önceki kurgudadır.
 export function standartAyarla(s = {}, surum = 0) {
-  const eski = !(surum >= OLCU_SURUM);
-  YENI_KURAL = !eski;
+  const eski = !(surum >= YENI_KURAL_SURUM);
+  YENI_KURAL = !eski; KOSE_KURAL = surum >= KOSE_KURAL_SURUM;
   const al = ad => {
     const v = Number(s?.[ad]), [a, b] = STANDART_SINIR[ad];
     if (Number.isFinite(v) && v >= a && v <= b) return v;
@@ -533,17 +539,35 @@ export function parcalar(m) {
         k('Baza', 0, 0, 40, w, BAZA, kd - 90, 'baza');
         k('Baza', 40, 0, kd - 50, kd - 90, BAZA, d - kd + 50, 'baza');
       }
-      // L gövdede arkalık her zaman çakmadır (iki duvara bakan iki parça); kanallı kurgu yalnızca düz gövdelerdedir
-      k('Arkalık', 0, y0, 0, w, hh, ARK, 'govde');
-      k('Arkalık', 0, y0, ARK, ARK, hh, d - ARK, 'govde');
-      k('Yan', w - T, y0, ARK, T, hh, kd - ARK, 'govde');
-      k('Yan', ARK, y0, d - T, kd - ARK, hh, T, 'govde');
+      // Arkalık iki parçadır (iki duvara bakar). Önceki projelerde ve çakma standardında gövdenin arkasına çakılır.
+      // Köşe gövdesi kuralında (kanallı): yanlar ve tablalar duvara kadar uzanır, arkalıklar onların kanalına girer;
+      // A kolundaki arkalık köşeye kadar gider, B kolundaki ona önden dayanır (köşede iki arkalık birbirine tutturulur).
+      const kanalli = KOSE_KURAL && ARK_KANAL, g = kanalli ? 0 : ARK; // g: gövde parçalarının duvardan başladığı yer
+      if (kanalli) {
+        const et = T - KANAL_DERIN; // kanalın dibinde levhadan kalan et
+        // boylar tam milimetredir: kanala giren uç tam ölçüde, köşedeki uçta 1 mm'den az pay kalır
+        const uzA = Math.floor(w - et - KANAL_ARKA), uzB = Math.floor(d - et - KANAL_ARKA - ARK);
+        k('Arkalık', w - et - uzA, y0 + et, KANAL_ARKA, uzA, hh - 2 * et, ARK, 'govde');
+        k('Arkalık', KANAL_ARKA, y0 + et, d - et - uzB, ARK, hh - 2 * et, uzB, 'govde');
+      } else {
+        k('Arkalık', 0, y0, 0, w, hh, ARK, 'govde');
+        k('Arkalık', 0, y0, ARK, ARK, hh, d - ARK, 'govde');
+      }
+      k('Yan', w - T, y0, g, T, hh, kd - g, 'govde');
+      k('Yan', g, y0, d - T, kd - g, hh, T, 'govde');
       const tabla = (ad, y) => {
-        k(ad, ARK, y, ARK, w - T - ARK, T, kd - ARK, 'govde');
-        k(ad, ARK, y, kd, kd - ARK, T, d - kd - T, 'govde');
+        k(ad, g, y, g, w - T - g, T, kd - g, 'govde');
+        k(ad, g, y, kd, kd - g, T, d - kd - T, 'govde');
       };
       tabla('Alt tabla', y0); tabla('Üst tabla', y0 + hh - T);
-      for (let i = 1; i <= (m.raf || 0); i++) tabla('Raf', y0 + T + (hh - 2 * T) * i / (m.raf + 1));
+      // Raf iki parçadır. Köşe gövdesi kuralında düz gövdedeki hareketli raf gibi: yan panelden 1 mm dar, önden 20 mm kısa, arkalığa dayalı
+      const lRaf = y => {
+        if (!KOSE_KURAL) { tabla('Raf', y); return; }
+        const ic = kanalli ? IC : ARK, on = kd - 20;
+        k('Raf', ic, y, ic, w - T - 1 - ic, T, on - ic, 'govde');
+        k('Raf', ic, y, on, on - ic, T, d - T - 1 - on, 'govde');
+      };
+      for (let i = 1; i <= (m.raf || 0); i++) lRaf(y0 + T + (hh - 2 * T) * i / (m.raf + 1));
       const ky = y0 + B, kh = hh - 2 * B;
       onPanel('Kapak', kd + KAPAK_K, ky, w - kd - KAPAK_K - B, kh, kd);
       yanPanel('Kapak', kd, ky, kd, d - kd - B, kh);
@@ -710,12 +734,26 @@ export function parcalar(m) {
         k('Baza', a, 0, 40, R - 50, BAZA, b - 40, 'baza');
         cey('Baza', 0, BAZA, R - 50, R - 50, 'baza');
       }
-      k('Arkalık', 0, Y0, 0, w, h - Y0, ARK, 'govde');
-      k('Yan', 0, Y0, ARK, T, h - Y0, d - ARK, 'govde');
-      k('Yan', w - T, Y0, ARK, T, h - Y0, b - ARK, 'govde');
+      // Köşe gövdesi kuralında (kanallı): yan panel duvara kadar uzanır, arkalık yanın ve tablaların kanalına girer.
+      // Kavis tarafında yan panel yoksa (kavis duvara kadar iniyorsa) arkalığın o ucu serbesttir, alt ve üst tablanın kanalı taşır.
+      const kanalli = KOSE_KURAL && ARK_KANAL, g = kanalli ? 0 : ARK;
+      if (kanalli) {
+        const et = T - KANAL_DERIN, sagYan = b >= KANAL_ARKA + ARK + 10; // kavis tarafında kanal açılacak kadar derin yan panel var mı
+        k('Arkalık', et, Y0 + et, KANAL_ARKA, (sagYan ? w - et : w - 1) - et, h - Y0 - 2 * et, ARK, 'govde');
+      } else k('Arkalık', 0, Y0, 0, w, h - Y0, ARK, 'govde');
+      k('Yan', 0, Y0, g, T, h - Y0, d - g, 'govde');
+      k('Yan', w - T, Y0, g, T, h - Y0, b - g, 'govde');
       dilim('Alt tabla', Y0, T, 'govde', 'govde');
       dilim('Üst tabla', h - T, T, 'govde', 'govde');
-      for (let i = 1; i <= (m.raf || 0); i++) dilim('Raf', Y0 + T + (h - Y0 - 2 * T) * i / (m.raf + 1), T, 'govde', 'govde');
+      // Raf: köşe gövdesi kuralında yan panelden 1 mm içeride başlar, arkalığa dayanır, ön kenarı (kavis dahil) 20 mm içeridedir
+      const kavisRaf = y => {
+        if (!KOSE_KURAL) { dilim('Raf', y, T, 'govde', 'govde'); return; }
+        const ic = kanalli ? IC : ARK, x0 = T + 1, cx = Math.max(a, x0), cz = Math.max(b, ic), ucX = a + R - 20, ucZ = b + R - 20;
+        k('Raf', x0, y, ic, a - x0, T, d - 20 - ic, 'govde');
+        k('Raf', cx, y, ic, ucX - cx, T, cz - ic, 'govde');
+        if (ucX - cx > 0 && ucZ - cz > 0) P.push({ ad: 'Raf', sekil: 'ceyrek', x: cx, y, z: cz, rx: ucX - cx, rz: ucZ - cz, h: T, mat: 'govde', tur: 'govde' });
+      };
+      for (let i = 1; i <= (m.raf || 0); i++) kavisRaf(Y0 + T + (h - Y0 - 2 * T) * i / (m.raf + 1));
       const ky = Y0 + B, kh = h - Y0 - 2 * B;
       if (!acik) {
         if (a >= 150) {
