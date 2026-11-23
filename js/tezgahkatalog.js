@@ -2,6 +2,7 @@
 // Projede seçim ayar.tezgahSec içinde tutulur: { id, yuzey, kalinlik }. Katalogdan bir plaka seçildiğinde tezgah rengi plakanın
 // ortalama rengine çekilir (plan, DXF ve resmin yüklenemediği durumlar için); 3B çizimde ve fotoğrafta plakanın resmi doku olur.
 import { TEZGAH_TEMEL, TEZGAH_MARKALARI, TEZGAH_GRUPLARI, TEZGAH_YUZEYLERI, TEZGAH_KATALOG } from './tezgah-veri.js';
+import { malzemeRenkten } from './malzemeler.js';
 
 export { TEZGAH_TEMEL, TEZGAH_MARKALARI, TEZGAH_GRUPLARI, TEZGAH_YUZEYLERI, TEZGAH_KATALOG };
 
@@ -23,6 +24,8 @@ export function tezgahSecimi(p) {
 export function tezgahAdi(p, { kodlu = true } = {}) {
   const s = tezgahSecimi(p);
   if (s) return `${TEZGAH_MARKALARI[s.marka]} ${s.ad}` + ` · ${String(TEZGAH_YUZEYLERI[s.yuzey] || s.yuzey).replace(/ \(.*\)$/, '')} · ${s.kalinlik} mm` + (kodlu && s.kod ? ` · kod ${s.kod}` : '');
+  const md = malzemeRenkten(p?.renk?.tezgah); // renk ve malzeme kataloğundan seçilmiş gerçek tezgah malzemesi
+  if (md) return `${md.ad} · ${md.marka}`;
   const renk = String(p?.renk?.tezgah || '').toLowerCase(), temel = TEZGAH_TEMEL.find(t => t[1] === renk && t[2] === (p?.desen?.tezgah || 'duz'));
   return temel ? temel[0] : ({ mermer: 'Mermer desenli', ahsap: 'Ahşap desenli' }[p?.desen?.tezgah] || 'Düz renk');
 }

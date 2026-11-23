@@ -2,6 +2,7 @@
 // Veri, aynı sahibin eB Creator uygulamasındaki renk tablosundan alınmıştır (eb/renk-veri.mjs). RAL tonları ve dekor renkleri
 // ekranda yaklaşık görünür; kesin renk için kartelaya bakılır. Dekor adları levha üreticilerinin ürün adlarıdır: uygulama
 // başkalarına verilecekse kullanıcının kararıyla çıkarılır ya da değiştirilir. Tabloyu elle düzenlemeyin.
+import { malzemeAdi } from './malzemeler.js';
 export const RENK_GRUPLARI = [['Temel', 'Temel renkler'], ['RAL', 'RAL'], ['Panel', 'Panel dekorları'], ['MDF', 'MDF dekorları'], ['Sunta', 'Sunta dekorları']];
 // [grup, ad, renk]
 export const RENK_KATALOG = [
@@ -649,4 +650,6 @@ export function renkAra(grup = '', yazi = '') {
 // Bir rengin katalogdaki adı (aynı ton birden çok adda varsa ilki); katalogda yoksa boş
 const adlar = new Map();
 for (const r of RENK_KATALOG) if (!adlar.has(r[2])) adlar.set(r[2], r[1]);
-export const renkAdi = hex => adlar.get(String(hex || '').toLowerCase()) || '';
+// Renk bir gerçek malzemenin imza rengiyse (malzemeler.js) malzemenin adı döner: kesim listesi, teklif ve CAM parça listesi adı buradan alır.
+// (Bu satır renk tablosunu üreten betikte yoktur; tablo yeniden üretilirse elle geri konur.)
+export const renkAdi = hex => adlar.get(String(hex || '').toLowerCase()) || malzemeAdi(hex);

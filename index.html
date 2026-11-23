@@ -8,7 +8,7 @@
   <meta name="mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-title" content="ARTAPP">
-  <script>window.ARTAPP_SUNUCUSUZ = true; window.ARTAPP_SURUM = '23.11.2026 00:22';</script>
+  <script>window.ARTAPP_SUNUCUSUZ = true; window.ARTAPP_SURUM = '23.11.2026 00:55';</script>
   <link rel="manifest" href="manifest.json">
   <link rel="icon" href="simge.svg" type="image/svg+xml">
   <link rel="apple-touch-icon" href="simge-180.png">
@@ -339,10 +339,11 @@
 
   <dialog id="renkKatalog">
     <form method="dialog">
-      <h2>Renk kataloğu</h2>
-      <p class="ipucu">Önce rengin uygulanacağı yüzeyi, sonra rengi seçin.</p>
+      <h2>Renk ve malzeme kataloğu</h2>
+      <p class="ipucu">Önce uygulanacak yüzeyi, sonra rengi ya da malzemeyi seçin. “Gerçek” bölümlerdeki malzemeler doku resimleriyle gelir ve çizimde aynı dokuyla görünür. Bir dolabı seçip açarsanız yalnızca o dolaba da uygulayabilirsiniz.</p>
       <div class="kkCip" id="rkHedef"></div>
       <div class="secici sar" id="rkGrup"></div>
+      <select id="rkMarka" aria-label="Marka" hidden></select>
       <input type="search" id="rkAra" placeholder="Renk adı ya da numarası ara (ör. 7016, ceviz)" aria-label="Renk ara" autocomplete="off">
       <div class="rkIzgara" id="rkListe"></div>
       <p class="ipucu kisa" id="rkDurum" role="status"></p>

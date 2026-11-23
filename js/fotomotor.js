@@ -17,6 +17,9 @@
 //   sun: güneşe doğru birim vektör, sunC: güneş rengi, exp: gökyüzü parlaklık çarpanı, led: ışık veren yüzeylerin şiddeti
 //   pl: nokta ışıklar, ışık başına 7 sayı: x y z r g b şiddet; seed: rastgele sayı tohumu
 //   tex: { w, h, d: Uint8Array RGB } ya da null (malzeme 18 için resim dokusu), texS: dokunun yinelenme boyu (cm), texG: doku parlak mı
+//   texler: [{ w, h, d: Uint8Array RGB, en, boy: dokunun gerçek ölçüsü (cm), g: parlak mı, dm: resimdeki damar yönü (1 düşey, 2 yatay, 0 yok) }] ya da null
+//     (ARTAPP eki: katalogdan gerçek malzemeler; malzeme kodu 100 + sıra. Kutunun rengi dokuyla çarpılır: beyaz, dokunun kendi rengidir.
+//      Dik yüzeyde damar düşey, yatay yüzeyde x ekseni boyunca uzanacak biçimde resim gerekirse çeyrek tur döndürülür.)
 // Malzeme kodları:
 //   1 lake ya da yarı mat boyalı yüzey      2 ahşap (damar dik)        3 benekli taş tezgah     4 parlak metal (kulp)
 //   5 cam                                   6 parlak yüzey (siyah cam, lakobel, parlak kaplama)   7 parke zemin
@@ -104,7 +107,7 @@ export function makeTracer(SC){
   return L(L(L(hsh(X,Y,Z),hsh(X+1,Y,Z),u),L(hsh(X,Y+1,Z),hsh(X+1,Y+1,Z),u),v),L(L(hsh(X,Y,Z+1),hsh(X+1,Y,Z+1),u),L(hsh(X,Y+1,Z+1),hsh(X+1,Y+1,Z+1),u),v),w)};
  const wood=(u,v,w)=>{const n=vn(u*.012,v*.18,w*.18),r=Math.sin((v*1.25+w*.7+n*10+vn(u*.003,v*.04,w*.04)*16))*.5+.5,fine=vn(u*.5,v*4,w*4),pore=vn(u*.08,v*9,w*9);return .66+.27*Math.pow(r,.6)+.09*fine-.05*pore};
  // malzeme: albedo + parlaklık
- const M=new Float32Array(6),TX=SC.tex||null,LUT=new Float32Array(256);for(let i=0;i<256;i++)LUT[i]=Math.pow(i/255,2.2);// r g b sp rough metal
+ const M=new Float32Array(6),TX=SC.tex||null,TXL=SC.texler||null,LUT=new Float32Array(256);for(let i=0;i<256;i++)LUT[i]=Math.pow(i/255,2.2);// r g b sp rough metal
  const surf=(q,px,py,pz,ax)=>{const mat=BX[q+9];let ar=BX[q+6],ag=BX[q+7],ab=BX[q+8],rough=.6,sp=.03,metal=0;
   if(mat==2||mat==12||mat==7){let f;
    if(mat==7){const row=Math.floor(pz/19),off=hsh(row,7,3)*140,seg=Math.floor((px+off)/140),vv=.86+.24*hsh(seg,row,11);f=wood(px+off,pz*1.7,py)*vv;const fr=(pz/19)-row,fs=((px+off)/140)-seg;if(fr<.02||fs<.006)f*=.55;sp=.05;rough=.25}
@@ -121,6 +124,13 @@ export function makeTracer(SC){
    const a1=Math.abs(Math.sin((u*.010+v*.006+tid*9)*6.3+n*7.5)),a2=Math.abs(Math.sin((u*.024-v*.017+tid*5)*5.1+n*11)),vein=Math.pow(1-a1,16)*.9+Math.pow(1-a2,34)*.6,f=.94+.09*n-.42*vein;
    ar*=f+vein*.08;ag*=f+vein*.03;ab*=f-vein*.04;sp=fl?.17:.1;rough=fl?.02:.03}
   else if(mat==18&&TX){let u,v;if(ax==1){u=px;v=pz}else if(ax==2){u=px;v=py}else{u=pz;v=py}/* ARTAPP eki: doku dört komşu noktadan yumuşatılarak okunur (yakından bakınca kareler görünmesin) */const TS=SC.texS||320,fu=((((u/TS)%1)+1)%1)*TX.w-.5,fv=((((v/TS*2)%1)+1)%1)*TX.h-.5,u0=Math.floor(fu),v0=Math.floor(fv),au=fu-u0,av=fv-v0,xa=((u0%TX.w)+TX.w)%TX.w,xb=(xa+1)%TX.w,ya=((v0%TX.h)+TX.h)%TX.h,yb=(ya+1)%TX.h,k00=(ya*TX.w+xa)*3,k10=(ya*TX.w+xb)*3,k01=(yb*TX.w+xa)*3,k11=(yb*TX.w+xb)*3,w00=(1-au)*(1-av),w10=au*(1-av),w01=(1-au)*av,w11=au*av;ar=LUT[TX.d[k00]]*w00+LUT[TX.d[k10]]*w10+LUT[TX.d[k01]]*w01+LUT[TX.d[k11]]*w11;ag=LUT[TX.d[k00+1]]*w00+LUT[TX.d[k10+1]]*w10+LUT[TX.d[k01+1]]*w01+LUT[TX.d[k11+1]]*w11;ab=LUT[TX.d[k00+2]]*w00+LUT[TX.d[k10+2]]*w10+LUT[TX.d[k01+2]]*w01+LUT[TX.d[k11+2]]*w11;if(SC.texG){sp=.1;rough=.02}else{sp=.04;rough=.38}}
+  else if(mat>=100&&TXL&&TXL[mat-100]){/* ARTAPP eki: katalogdan gerçek malzeme dokusu (çoklu resim); gerçek ölçüsünde, dört komşu noktadan yumuşatılarak okunur */
+   const T=TXL[mat-100];let u,v;if(ax==1){u=px;v=pz}else if(ax==2){u=px;v=py}else{u=pz;v=py}
+   const cevir=ax==1?T.dm==1:T.dm==2;if(cevir){const s=u;u=v;v=s}
+   let ku=(((u/T.en)%1)+1)%1,kv=(((v/T.boy)%1)+1)%1;if(ax!=1&&!cevir)kv=1-kv;/* dik yüzeyde resim baş aşağı durmasın */
+   const fu=ku*T.w-.5,fv=kv*T.h-.5,u0=Math.floor(fu),v0=Math.floor(fv),au=fu-u0,av=fv-v0,xa=((u0%T.w)+T.w)%T.w,xb=(xa+1)%T.w,ya=((v0%T.h)+T.h)%T.h,yb=(ya+1)%T.h,k00=(ya*T.w+xa)*3,k10=(ya*T.w+xb)*3,k01=(yb*T.w+xa)*3,k11=(yb*T.w+xb)*3,w00=(1-au)*(1-av),w10=au*(1-av),w01=(1-au)*av,w11=au*av,D=T.d;
+   ar*=LUT[D[k00]]*w00+LUT[D[k10]]*w10+LUT[D[k01]]*w01+LUT[D[k11]]*w11;ag*=LUT[D[k00+1]]*w00+LUT[D[k10+1]]*w10+LUT[D[k01+1]]*w01+LUT[D[k11+1]]*w11;ab*=LUT[D[k00+2]]*w00+LUT[D[k10+2]]*w10+LUT[D[k01+2]]*w01+LUT[D[k11+2]]*w11;
+   if(T.g){sp=.1;rough=.03}else{sp=.04;rough=.4}}
   else if(mat==17){const f=.92+.1*vn(px*.9,py*.9,pz*.9);ar*=f;ag*=f;ab*=f;sp=0;rough=1}
   else if(mat==14){const tw=15,th=7.5,row=Math.floor(py/th),u=px+(row%2?tw/2:0),fu=u/tw-Math.floor(u/tw),fv=py/th-row,tv=.94+.06*hsh(Math.floor(u/tw),row,5);let f=tv;if(fu<.022||fu>.978||fv<.045||fv>.955){f=.62;sp=.01;rough=1}else{sp=.09;rough=.06}ar*=f;ag*=f;ab*=f}
   else if(mat>=19&&mat<=25){/* ARTAPP eki: duvar ve tezgah arası desenleri; u yatay, v düşey (yüzeyin eksenine göre) */

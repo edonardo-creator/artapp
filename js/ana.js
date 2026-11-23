@@ -56,6 +56,7 @@ import { islemeKurali, islemeVarsayilanKoy, ISLEME_KURAL } from './isleme.js';
 try { islemeVarsayilanKoy(JSON.parse(localStorage.getItem('kurgu.isleme.v1') || '{}')); } catch { /* depolama kapalı ya da bozuk kayıt: uygulamanın ölçüleri */ }
 import { DEKOR_GRUPLARI, dekorAyari } from './dekor.js';
 import { RENK_GRUPLARI, renkAra, renkAdi } from './renkler.js';
+import { MALZEME_BOLUMLERI, malzemeAra, malzemeMarkalari, malzemeRenkten, malzemeOnizleme } from './malzemeler.js';
 import { KAPAK_GRUPLARI, KAPAK_STILLERI, kapakOnizleme, kapakStili, camAyari, CAM_TURLERI, CAM_YUZEYLERI, AL_RENKLERI } from './kapaklar.js';
 import { esitKur, esitle, esitPlanla, esitSilindi, esitAyarDegisti, esitDurum, sonrakiTarih } from './esit.js';
 
@@ -1228,7 +1229,7 @@ function odaCiz() {
     `<h3>Renkler</h3><div class="renkler">` + renk('renk.kapak', 'Alt kapak', P.renk.kapak) + renk('renk.ustKapak', 'Üst kapak', P.renk.ustKapak) +
     renk('renk.govde', 'Gövde', P.renk.govde) + renk('renk.tezgah', 'Tezgah', P.renk.tezgah) +
     renk('renk.baza', 'Baza', P.renk.baza) + renk('renk.duvar', 'Duvar', P.renk.duvar) + renk('renk.zemin', 'Zemin', P.renk.zemin) +
-    renk('renk.arasi', 'Tezgah arası', P.renk.arasi || '#e4e8e2') + (P.ayar.supurgelik ? renk('renk.supurgelik', 'Süpürgelik', P.renk.supurgelik || '#f3f2ee') : '') + `</div><button type="button" class="tam" data-renk-ac="1" title="RAL renkleri ve levha dekorları: seçtiğiniz renk kapak, gövde, duvar ya da başka bir yüzeye uygulanır">Renk kataloğu (RAL, dekorlar)…</button><label class="alan"><span>Tezgah</span><button type="button" class="kapakSec" data-tezgah-ac="1" title="Tezgah kataloğunu açar: temel renkler ve plaka katalogları">${kacis(tezgahAdi(P, { kodlu: false }))}</button></label><h3>Desen ve kaplama</h3>` +
+    renk('renk.arasi', 'Tezgah arası', P.renk.arasi || '#e4e8e2') + (P.ayar.supurgelik ? renk('renk.supurgelik', 'Süpürgelik', P.renk.supurgelik || '#f3f2ee') : '') + `</div><button type="button" class="tam" data-renk-ac="1" title="RAL renkleri, dekor adları ve gerçek dokulu malzemeler (levha ve kapak dekorları, tezgah, zemin, duvar): seçtiğiniz renk ya da malzeme kapak, gövde, tezgah, duvar ya da başka bir yüzeye uygulanır">Renk ve malzeme kataloğu…</button>${malzemeOzeti()}<label class="alan"><span>Tezgah</span><button type="button" class="kapakSec" data-tezgah-ac="1" title="Tezgah kataloğunu açar: temel renkler ve plaka katalogları">${kacis(tezgahAdi(P, { kodlu: false }))}</button></label><h3>Desen ve kaplama</h3>` +
     secim('desen.kapak', 'Alt kapak', P.desen?.kapak || 'duz', DESEN_KAPAK) +
     secim('desen.ustKapak', 'Üst kapak', P.desen?.ustKapak || 'duz', DESEN_KAPAK) +
     secim('desen.tezgah', 'Tezgah', P.desen?.tezgah || 'duz', DESEN_TEZGAH) +
@@ -1371,27 +1372,70 @@ function dekorPencereAc() { dekorPencereCiz(); if (!$('#dekorAyar').open) $('#de
 
 // ---- Renk kataloğu: temel renkler, RAL ve levha dekorları. Önce hangi yüzeye uygulanacağı seçilir, sonra renk ----
 const RENK_HEDEFLERI = [['kapak', 'Alt kapak'], ['ustKapak', 'Üst kapak'], ['govde', 'Gövde'], ['baza', 'Baza'], ['arasi', 'Tezgah arası'], ['duvar', 'Duvar'], ['zemin', 'Zemin'], ['tezgah', 'Tezgah']];
-let rkHedef = 'kapak', rkGrup = 'RAL', rkYazi = '';
+// Seçili dolap(lar)a özel hedefler: renk ya da malzeme yalnızca o dolabın kapağına ya da gövdesine uygulanır (dolabın "özel renk" alanı)
+const MODUL_HEDEFLERI = [['m:kapakRenk', 'Seçili dolap: kapak'], ['m:govdeRenk', 'Seçili dolap: gövde']];
+// Katalog: renkler (temel, RAL, dekor adları; yaklaşık ton) ve gerçek malzemeler (rkGrup 'M:bölüm'; doku resimleriyle).
+// Gerçek malzeme seçilince yüzeyin rengi malzemenin imza rengi olur; çizim dokuyu o renkten tanır (malzemeler.js).
+let rkHedef = 'kapak', rkGrup = 'RAL', rkYazi = '', rkMarka = '', rkSinir = 240;
+const rkSeciliModuller = () => P.moduller.filter(m => (secililer.has(m.id) || m.id === secili) && ['alt', 'ust', 'boy'].includes(TANIM[m.tip]?.sinif));
+const rkHedefler = () => { const ms = rkSeciliModuller(); return ms.length ? [...RENK_HEDEFLERI, ...MODUL_HEDEFLERI.filter(([k]) => ms.some(m => alanlar(m)[k.slice(2)]))] : RENK_HEDEFLERI; };
+const rkHedefRengi = h => String((h.startsWith('m:') ? rkSeciliModuller().find(m => m[h.slice(2)])?.[h.slice(2)] : P.renk[h]) || '').toLowerCase();
+const rkSwatch = (renk, md) => { const on = malzemeOnizleme(md); return `background:${renk || '#fff'}${on ? ` url(${on}) center/cover` : ''}`; };
 function renkKatalogAc() {
-  rkYazi = ''; $('#rkAra').value = '';
+  rkYazi = ''; $('#rkAra').value = ''; rkSinir = 240;
+  if (!rkHedefler().some(h => h[0] === rkHedef)) rkHedef = 'kapak';
+  const md = malzemeRenkten(rkHedefRengi(rkHedef)); // yüzeyde gerçek malzeme varsa katalog onun bölümünde ve markasında açılır
+  if (md) { rkGrup = 'M:' + md.bolum; rkMarka = md.marka; }
   renkKatalogCiz();
   if (!$('#renkKatalog').open) $('#renkKatalog').showModal();
 }
-function renkKatalogCiz() {
-  const simdiki = String(P.renk[rkHedef] || '').toLowerCase();
-  $('#rkHedef').innerHTML = RENK_HEDEFLERI.map(([k, ad]) => `<button type="button" data-rk-hedef="${k}" class="${k === rkHedef ? 'aktif' : ''}"><i style="background:${P.renk[k] || '#fff'}"></i>${ad}</button>`).join('');
-  $('#rkGrup').innerHTML = RENK_GRUPLARI.map(([k, ad]) => `<button type="button" data-rk-grup="${k}" class="${k === rkGrup ? 'aktif' : ''}">${ad}</button>`).join('');
-  const liste = renkAra(rkYazi.trim() ? '' : rkGrup, rkYazi);
-  $('#rkListe').innerHTML = liste.map(r => `<button type="button" class="rkRenk${r[2] === simdiki ? ' secili' : ''}" data-rk="${r[2]}" title="${kacis(r[1])}"><i style="background:${r[2]}"></i><span>${kacis(r[1].replace(/^(Panel|MDF|Sunta) /, ''))}</span></button>`).join('') || '<p class="ipucu">Bu adla renk bulunamadı.</p>';
-  $('#rkDurum').textContent = `${RENK_HEDEFLERI.find(h => h[0] === rkHedef)[1]}: ${renkAdi(simdiki) || simdiki || 'seçilmedi'}. Ekrandaki ton yaklaşıktır; kesin renk için kartelaya bakın.`;
+// liste false ise kartlar yeniden kurulmaz, yalnızca seçim işareti ve üstteki yazılar güncellenir (seçince liste zıplamasın)
+function renkKatalogCiz(liste = true) {
+  const hedefler = rkHedefler();
+  if (!hedefler.some(h => h[0] === rkHedef)) rkHedef = 'kapak';
+  const simdiki = rkHedefRengi(rkHedef), bolum = rkGrup.startsWith('M:') ? rkGrup.slice(2) : '';
+  $('#rkHedef').innerHTML = hedefler.map(([k, ad]) => { const r = rkHedefRengi(k); return `<button type="button" data-rk-hedef="${k}" class="${k === rkHedef ? 'aktif' : ''}"><i style="${rkSwatch(r, malzemeRenkten(r))}"></i>${ad}</button>`; }).join('');
+  $('#rkGrup').innerHTML = [...RENK_GRUPLARI, ...MALZEME_BOLUMLERI.map(([k, ad]) => ['M:' + k, ad + ' · gerçek'])]
+    .map(([k, ad]) => `<button type="button" data-rk-grup="${k}" class="${k === rkGrup ? 'aktif' : ''}">${ad}</button>`).join('');
+  $('#rkMarka').hidden = !bolum;
+  for (const k of ['#rkHedef', '#rkGrup']) $(k).querySelector('.aktif')?.scrollIntoView({ block: 'nearest', inline: 'center' }); // telefonda yana kayan satırda seçili düğme görünsün
+  $('#rkAra').placeholder = bolum ? 'Malzeme adı ya da kodu ara (ör. ceviz, H1113, 8301)' : 'Renk adı ya da numarası ara (ör. 7016, ceviz)';
+  if (!liste) $('#rkListe').querySelectorAll('[data-rk]').forEach(b => b.classList.toggle('secili', b.dataset.rk === simdiki));
+  else if (bolum) {
+    const markalar = malzemeMarkalari(bolum);
+    if (rkMarka && !markalar.some(m => m[0] === rkMarka)) rkMarka = '';
+    $('#rkMarka').innerHTML = `<option value="">Bütün markalar (${markalar.reduce((t, m) => t + m[1], 0)})</option>` + markalar.map(([m, n]) => `<option value="${kacis(m)}"${m === rkMarka ? ' selected' : ''}>${kacis(m)} (${n})</option>`).join('');
+    const hepsi = malzemeAra(bolum, rkMarka, rkYazi), kalan = Math.max(0, hepsi.length - rkSinir);
+    $('#rkListe').innerHTML = (hepsi.slice(0, rkSinir).map(m => { const on = malzemeOnizleme(m);
+      return `<button type="button" class="rkRenk rkMalz${m.renk === simdiki ? ' secili' : ''}" data-rk="${m.renk}" title="${kacis(m.ad + ' · ' + m.marka)}"><i style="background:${m.renk}">${on ? `<img loading="lazy" decoding="async" src="${on}" alt="">` : ''}</i><span>${kacis(m.ad)}</span></button>`; }).join('')
+      + (kalan ? `<button type="button" class="rkDaha" data-rk-daha="1">Daha fazla göster (${kalan} malzeme daha)</button>` : '')) || '<p class="ipucu">Bu adla malzeme bulunamadı.</p>';
+  } else {
+    const renkler = renkAra(rkYazi.trim() ? '' : rkGrup, rkYazi);
+    $('#rkListe').innerHTML = renkler.map(r => `<button type="button" class="rkRenk${r[2] === simdiki ? ' secili' : ''}" data-rk="${r[2]}" title="${kacis(r[1])}"><i style="background:${r[2]}"></i><span>${kacis(r[1].replace(/^(Panel|MDF|Sunta) /, ''))}</span></button>`).join('') || '<p class="ipucu">Bu adla renk bulunamadı.</p>';
+  }
+  const ad = hedefler.find(h => h[0] === rkHedef)[1], md = malzemeRenkten(simdiki);
+  $('#rkDurum').textContent = md
+    ? `${ad}: ${md.ad} · ${md.marka}. ${md.dokulu ? `Gerçek doku; çizimde ${md.en} × ${md.boy} mm ölçüsünde yinelenir.` : 'Düz renk.'}`
+    : `${ad}: ${renkAdi(simdiki) || simdiki || 'seçilmedi'}. Ekrandaki ton yaklaşıktır; kesin renk için kartelaya bakın.`;
 }
 function renkKatalogTik(e) {
   const h = e.target.closest('[data-rk-hedef]'), g = e.target.closest('[data-rk-grup]'), r = e.target.closest('[data-rk]');
-  if (h) { rkHedef = h.dataset.rkHedef; renkKatalogCiz(); return; }
-  if (g) { rkGrup = g.dataset.rkGrup; rkYazi = ''; $('#rkAra').value = ''; renkKatalogCiz(); return; }
+  if (h) { rkHedef = h.dataset.rkHedef; renkKatalogCiz(false); return; }
+  if (g) { rkGrup = g.dataset.rkGrup; rkYazi = ''; $('#rkAra').value = ''; rkSinir = 240; renkKatalogCiz(); $('#rkListe').scrollTop = 0; return; }
+  if (e.target.closest('[data-rk-daha]')) { rkSinir += 480; renkKatalogCiz(); return; }
   if (!r) return;
-  degistir(() => { P.renk[rkHedef] = r.dataset.rk; if (rkHedef === 'tezgah') delete P.ayar.tezgahSec; $('#oda').dataset.yenile = '1'; });
-  renkKatalogCiz();
+  const renk = r.dataset.rk;
+  degistir(() => {
+    if (rkHedef.startsWith('m:')) { const alan = rkHedef.slice(2); for (const m of rkSeciliModuller()) if (alanlar(m)[alan]) m[alan] = renk; $('#ozellik').dataset.id = ''; }
+    else { P.renk[rkHedef] = renk; if (rkHedef === 'tezgah') delete P.ayar.tezgahSec; }
+    $('#oda').dataset.yenile = '1';
+  });
+  renkKatalogCiz(false);
+}
+// Görünüm panelinde: gerçek malzeme atanmış yüzeylerin kısa özeti (ad ve önizleme)
+function malzemeOzeti() {
+  const s = RENK_HEDEFLERI.map(([k, ad]) => [ad, malzemeRenkten(P.renk[k])]).filter(e => e[1]);
+  return s.length ? `<p class="malzOzet">${s.map(([ad, m]) => `<span title="${kacis(m.ad + ' · ' + m.marka)}"><i style="${rkSwatch(m.renk, m)}"></i><b>${ad}</b> ${kacis(m.ad)}</span>`).join('')}</p>` : '';
 }
 
 // ---- Tezgah kataloğu: temel renkler ve iki üreticinin plakaları. Plaka seçilince yüzey ve kalınlık aynı pencerede seçilir ----
@@ -2136,7 +2180,8 @@ function olaylar() {
   $('#tezgahAc').onclick = tezgahKatalogAc;
   document.addEventListener('click', e => { if (e.target.closest('[data-renk-ac]')) renkKatalogAc(); });
   $('#renkKatalog').addEventListener('click', renkKatalogTik);
-  $('#rkAra').addEventListener('input', e => { rkYazi = e.target.value; renkKatalogCiz(); });
+  $('#rkAra').addEventListener('input', e => { rkYazi = e.target.value; rkSinir = 240; renkKatalogCiz(); });
+  $('#rkMarka').addEventListener('change', e => { rkMarka = e.target.value; rkSinir = 240; renkKatalogCiz(); $('#rkListe').scrollTop = 0; });
   $('#rkAra').addEventListener('keydown', e => { if (e.key === 'Enter') e.preventDefault(); });
   $('#montajAc').onclick = () => kagitAc('montaj');
   $('#islemeAc').onclick = () => kagitAc('isleme');

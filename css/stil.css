@@ -654,3 +654,29 @@ body.vitrin #tuval { cursor: grab; }
   body.vitrin #altGezinme .yalniz-vitrin { display: flex !important; }
   #altGezinme button[aria-pressed=true] { background: transparent; }
 }
+
+/* ---- Gerçek malzeme kataloğu (renk kataloğu penceresinin "gerçek" bölümleri) ve Görünüm panelindeki malzeme özeti ---- */
+#rkMarka { width: 100%; height: 34px; margin: 8px 0 0; border: 1px solid var(--cizgi); border-radius: var(--r-k); padding: 0 8px; background: var(--yuzey); color: inherit; }
+#rkMarka[hidden] { display: none; }
+#rkAra { margin-top: 8px; }
+.rkIzgara:has(.rkMalz) { grid-template-columns: repeat(auto-fill, minmax(104px, 1fr)); }
+.rkMalz i { height: 72px; overflow: hidden; }
+.rkMalz img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.rkDaha { grid-column: 1 / -1; min-height: 38px; }
+.malzOzet { display: grid; gap: 5px; margin: 8px 0 2px; font-size: 12px; color: var(--soluk); }
+.malzOzet span { display: flex; align-items: center; gap: 7px; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.malzOzet i { width: 22px; height: 22px; flex: none; border-radius: 5px; border: 1px solid var(--cizgi-koyu); }
+.malzOzet b { font-weight: 600; color: var(--yazi); }
+/* Katalog kartı: renk kutusu kartın tam genişliğinde durur (düğmenin ortalama kuralı kutuyu yazı genişliğine indiriyordu) */
+.rkRenk { grid-template-columns: minmax(0, 1fr); justify-content: stretch; }
+@media (max-width: 900px), (max-height: 520px) {
+  /* Telefonda katalog: açıklama gizlenir, yüzey ve bölüm satırları tek satırda yana kayar; listeye yer kalır */
+  #renkKatalog > form > .ipucu:first-of-type { display: none; }
+  #rkHedef, #rkGrup { flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+  #rkHedef::-webkit-scrollbar, #rkGrup::-webkit-scrollbar { display: none; }
+  #rkHedef button, #rkGrup button { flex: none; }
+  #renkKatalog { height: calc(100dvh - 20px); max-height: none; }
+  #renkKatalog > form { display: flex; flex-direction: column; height: 100%; min-height: 0; }
+  #renkKatalog > form > * { flex: none; }
+  #renkKatalog .rkIzgara { flex: 1 1 0; max-height: none; min-height: 0; grid-auto-rows: max-content; align-content: start; } /* satırlar içerik boyunda kalır, liste kayar */
+}

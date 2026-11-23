@@ -6,7 +6,8 @@ import { donusum, yerelKutu, yon, kutu, engelMi, xEksenli, DUVAR_LISTE } from '.
 import { kertilmisParcalar, cikar, KERTME_PAYI } from './kertme.js';
 import { tezgahSecimi } from './tezgahkatalog.js';
 import { dekorUret } from './dekor.js';
-import { tezgahlar, parcaRengi, adaEkleri, supurgelikler, tezgahSupurgelikleri, tezgahDamlaliklari, delikliDikler } from './ortak.js';
+import { tezgahlar, parcaRengi, parcaTabanRengi, koyult, adaEkleri, supurgelikler, tezgahSupurgelikleri, tezgahDamlaliklari, delikliDikler } from './ortak.js';
+import { malzemeRenkten, malzemeDokusu, dokuYerlesimi } from './malzemeler.js';
 import { taclar, tacKutulari } from './tac.js';
 
 const KUTU = new THREE.BoxGeometry(1, 1, 1);
@@ -437,9 +438,66 @@ function plaka(id) {
   return k;
 }
 
-function mat(renk, tur, desen, ru = 1, rv = 1) {
+// Katalogdan seçilmiş gerçek malzeme (levha dekoru, tezgah, zemin, duvar): yüzeyin rengi malzemenin imza rengiyse dokusu kullanılır.
+// Resim bir kez yüklenir; gelene dek yüzey imza rengiyle düz çizilir, gelince sahne kendiliğinden yeniden kurulur.
+// veri: fotoğraf motoru için aynı resmin piksel dizisi.
+const dokuOnbellek = new Map();
+let dokuSayac = 0; // çizim sırasında parça sayacı: aynı dokunun dolaptan dolaba farklı yerinden başlaması için
+function gercekDoku(md) {
+  let k = dokuOnbellek.get(md.id);
+  if (k) return k;
+  k = { tex: null, veri: null, hazir: false };
+  dokuOnbellek.set(md.id, k);
+  const im = new Image();
+  im.onload = () => {
+    const c = document.createElement('canvas'); c.width = im.width; c.height = im.height;
+    const g = c.getContext('2d', { willReadFrequently: true }); g.drawImage(im, 0, 0);
+    try {
+      const d = g.getImageData(0, 0, c.width, c.height).data, o = new Uint8Array(c.width * c.height * 3);
+      for (let i = 0, j = 0; i < d.length; i += 4) { o[j++] = d[i]; o[j++] = d[i + 1]; o[j++] = d[i + 2]; }
+      k.veri = { w: c.width, h: c.height, d: o };
+    } catch { /* piksel okunamadıysa fotoğrafta düz renk kullanılır */ }
+    const t = new THREE.CanvasTexture(c);
+    t.wrapS = t.wrapT = THREE.RepeatWrapping; t.colorSpace = THREE.SRGBColorSpace; t.anisotropy = 8;
+    k.tex = t; k.hazir = true;
+    if (proje && sonOps) ciz(proje, sonOps);
+  };
+  im.src = malzemeDokusu(md);
+  return k;
+}
+// Gerçek malzemeli yüzeyin doku yerleşimi. u, v: yüzeyin iki kenarı (mm); damarYon: damarın uzanacağı kenar; kayma: dokunun
+// başlangıç yeri (0–7); ton: koyulaştırma rengi. Malzeme dokusuzsa, resmi henüz gelmediyse ya da tel görünümde null döner.
+function gmHazirla(md, uMm, vMm, damarYon = 'v', kayma = 0, ton = '') {
+  if (!md || !md.dokulu || durum.mod === 'tel') return null;
+  const k = gercekDoku(md);
+  return k.hazir ? { md, k, kayma, ton, ...dokuYerlesimi(md, uMm, vMm, damarYon) } : null;
+}
+// Bir dolap parçasının gerçek malzemesi (varsa): doku, parçanın geniş yüzüne gerçek ölçüsünde oturur.
+// Damar dik parçada (kapak, yan panel) düşey, yatay parçada (tabla, raf, tezgah) uzun kenar boyuncadır.
+const DOKULU_MAT = new Set(['kapak', 'govde', 'baza', 'tezgah']);
+function parcaDokusu(par, m) {
+  if (!DOKULU_MAT.has(par.mat) || (par.mat === 'tezgah' && plakaSec)) return null;
+  const md = malzemeRenkten(parcaTabanRengi(par, m, proje.renk));
+  if (!md) return null;
+  const ince = par.sx <= par.sy && par.sx <= par.sz ? 'x' : par.sy <= par.sz ? 'y' : 'z';
+  const [u, v] = ince === 'x' ? [par.sz, par.sy] : ince === 'y' ? [par.sx, par.sz] : [par.sx, par.sy];
+  const kayma = par.mat === 'kapak' ? dokuSayac++ % 8 : 0; // kapaklar birbirinin kopyası görünmesin; gövdede gerek yok
+  return gmHazirla(md, u, v, ince === 'y' ? (par.sx >= par.sz ? 'u' : 'v') : 'v', kayma, par.ton ? koyult('#ffffff', par.ton) : '');
+}
+
+// Kavisli (çeyrek daire) parçanın gerçek malzemesi: yatay parçada (tabla, raf, tezgah) doku üst yüze, dik parçada (kavisli kapak,
+// baza) kavis boyunca sarılır; damar dik parçada düşeydir.
+function ceyrekDokusu(par, m) {
+  if (!DOKULU_MAT.has(par.mat) || (par.mat === 'tezgah' && plakaSec)) return null;
+  const md = malzemeRenkten(parcaTabanRengi(par, m, proje.renk));
+  if (!md) return null;
+  return par.h < Math.min(par.rx, par.rz) ? gmHazirla(md, par.rx, par.rz, 'u') : gmHazirla(md, Math.PI / 4 * (par.rx + par.rz), par.h, 'v');
+}
+
+function mat(renk, tur, desen, ru = 1, rv = 1, gm = null) {
   let plk = null;
-  if (tur === 'tezgah' && plakaSec && durum.mod !== 'tel') { // katalog plakası: renk dokudan gelir; resim 'olcek' cm genişliği, yarısı kadar derinliği kaplar
+  if (gm) { renk = gm.ton || '#ffffff'; desen = `doku:${gm.md.id}:${gm.don ? 1 : 0}:${gm.kayma}`; ru = gm.ru; rv = gm.rv; } // gerçek malzeme: renk dokudan gelir
+  else if (tur === 'tezgah' && plakaSec && durum.mod !== 'tel') { // katalog plakası: renk dokudan gelir; resim 'olcek' cm genişliği, yarısı kadar derinliği kaplar
     const k = plaka(plakaSec.id);
     if (k.hazir) {
       plk = k; renk = '#ffffff'; desen = `plaka:${plakaSec.id}:${plakaSec.parlak ? 1 : 0}`;
@@ -474,7 +532,14 @@ function mat(renk, tur, desen, ru = 1, rv = 1) {
       envMapIntensity: tur === 'ayna' ? 1.3 : metal ? 1.1 : 0.75,
     });
   }
-  if (plk) { // katalog plakası: parlak yüzeyde vernikli ve net yansımalı, mat yüzeyde yumuşak
+  if (gm) { // katalogdan gerçek malzeme: doku gerçek ölçüsünde; parlak yüzeyde vernikli ve net yansımalı, matta yumuşak
+    const t = gm.k.tex.clone(); t.center.set(0.5, 0.5); t.rotation = gm.don ? Math.PI / 2 : 0; t.repeat.set(ru, rv);
+    t.offset.set((gm.kayma * 0.37) % 1, (gm.kayma * 0.61) % 1); t.needsUpdate = true; m.map = t;
+    const parlak = gm.md.parlak;
+    m.roughness = tur === 'tezgah' ? (parlak ? 0.12 : 0.42) : parlak ? 0.16 : tur === 'govde' ? 0.7 : 0.55;
+    if (m.isMeshPhysicalMaterial) { m.clearcoat = parlak ? 0.65 : tur === 'tezgah' ? 0.12 : 0.04; m.envMapIntensity = parlak ? 0.9 : 0.5; }
+    m.userData.md = gm.md; // fotoğraf dökümü dokuyu buradan tanır
+  } else if (plk) { // katalog plakası: parlak yüzeyde vernikli ve net yansımalı, mat yüzeyde yumuşak
     const t = plk.tex.clone(); t.repeat.set(ru, rv); t.needsUpdate = true; m.map = t;
     m.roughness = plakaSec.parlak ? 0.1 : 0.5;
     if (m.isMeshPhysicalMaterial) { m.clearcoat = plakaSec.parlak ? 0.7 : 0.06; m.envMapIntensity = plakaSec.parlak ? 0.95 : 0.55; }
@@ -582,7 +647,7 @@ function dekorCiz(p) {
 // ---- Çizim --------------------------------------------------------------------
 
 export function ciz(p, ops = {}) {
-  proje = p; sonOps = ops; plakaSec = tezgahSecimi(p);
+  proje = p; sonOps = ops; plakaSec = tezgahSecimi(p); dokuSayac = 0;
   secili = ops.secili ?? null;
   seciliKume = ops.secililer || new Set();
   uyariSet = ops.uyari || new Set();
@@ -618,7 +683,13 @@ export function ciz(p, ops = {}) {
   // Oda: zemin ve içe bakan dört duvar (dışarıdan bakınca öndeki duvar görünmez)
   const ds = p.desen || {};
   const zm = new THREE.MeshStandardMaterial({ color: renk.zemin, roughness: 0.85, transparent: tel, opacity: tel ? 0.06 : 1 });
-  if (!tel && ds.zemin && ds.zemin !== 'duz') {
+  const zMd = tel ? null : malzemeRenkten(renk.zemin), zDoku = zMd?.dokulu ? gercekDoku(zMd) : null;
+  if (zDoku?.hazir) { // katalogdan gerçek zemin (parke, karo): doku gerçek ölçüsünde döşenir; yön "Döşeme yönü" ayarından
+    const t = zDoku.tex.clone(), yon = Number(ds.zeminYon) || 0;
+    t.center.set(0.5, 0.5); t.rotation = yon * Math.PI / 180;
+    if (yon === 90) t.repeat.set(oda.d / zMd.en, oda.w / zMd.boy); else t.repeat.set(oda.w / zMd.en, oda.d / zMd.boy);
+    t.needsUpdate = true; zm.map = t; zm.color.set('#ffffff'); gecici.push(t);
+  } else if (!tel && ds.zemin && ds.zemin !== 'duz') {
     const t = desenTex(ds.zemin).clone();
     // döşeme yönü: 0 yan duvar boyunca, 90 arka duvar boyunca, 45 çapraz
     const yon = Number(ds.zeminYon) || 0;
@@ -626,7 +697,7 @@ export function ciz(p, ops = {}) {
     t.repeat.set(oda.w / 1200, oda.d / 1200); t.needsUpdate = true; zm.map = t;
     if (gercek) { zm.bumpMap = t; zm.bumpScale = 0.6; }
   }
-  if (gercek) { zm.roughness = ds.zemin === 'mermer' || ds.zemin === 'karo' ? 0.28 : 0.55; zm.envMapIntensity = 0.45; }
+  if (gercek) { zm.roughness = zDoku?.hazir ? (zMd.parlak ? 0.25 : 0.55) : ds.zemin === 'mermer' || ds.zemin === 'karo' ? 0.28 : 0.55; zm.envMapIntensity = 0.45; }
   const zemin = new THREE.Mesh(new THREE.PlaneGeometry(oda.w, oda.d), zm);
   zemin.rotation.x = -Math.PI / 2; zemin.position.set(oda.w / 2, 0, oda.d / 2);
   zemin.receiveShadow = !tel; zemin.userData.zemin = true; zemin.userData.yapi = true;
@@ -673,7 +744,10 @@ export function ciz(p, ops = {}) {
   }
   const dm = new THREE.MeshStandardMaterial({ color: renk.duvar, roughness: 0.95, transparent: tel, opacity: tel ? 0.04 : 1 });
   if (gercek) dm.envMapIntensity = 0.3; // duvar ortam ışığından az pay alsın: dolap gölgeleri ve hacim belirginleşir
-  if (!tel && ds.duvar && ds.duvar !== 'duz') { // duvar yüzeyinin doku koordinatı milimetredir: doku 600 mm'de (tuğla ve beton 750 / 1200 mm) bir yinelenir
+  const dMd = tel ? null : malzemeRenkten(renk.duvar), dDoku = dMd?.dokulu ? gercekDoku(dMd) : null;
+  if (dDoku?.hazir) { // katalogdan gerçek duvar kaplaması (duvar kağıdı, seramik, taş): duvarın doku koordinatı milimetredir
+    const t = dDoku.tex.clone(); t.repeat.set(1 / dMd.en, 1 / dMd.boy); t.needsUpdate = true; dm.map = t; dm.color.set('#ffffff'); gecici.push(t);
+  } else if (!tel && ds.duvar && ds.duvar !== 'duz') { // duvar yüzeyinin doku koordinatı milimetredir: doku 600 mm'de (tuğla ve beton 750 / 1200 mm) bir yinelenir
     const t = desenTex(ds.duvar).clone(), periyot = ds.duvar === 'tugla' ? 750 : ds.duvar === 'beton' ? 1200 : 600;
     t.repeat.set(1 / periyot, 1 / periyot); t.needsUpdate = true; dm.map = t;
     gecici.push(t);
@@ -757,8 +831,8 @@ export function ciz(p, ops = {}) {
         kova.kutular.push(ox, oy, oz, par.sx, par.sy, par.sz);
         continue;
       }
-      const duz = !par.sekil || par.sekil === 'egik', rk = renkBul(par, m);
-      const malzeme = duz && par.mat === 'kapak'
+      const duz = !par.sekil || par.sekil === 'egik', rk = renkBul(par, m), gm = duz ? parcaDokusu(par, m) : par.sekil === 'ceyrek' ? ceyrekDokusu(par, m) : null;
+      const malzeme = gm ? mat('', par.mat, '', 1, 1, gm) : duz && par.mat === 'kapak'
         ? mat(rk, 'kapak', TANIM[m.tip].sinif === 'ust' ? ds.ustKapak : ds.kapak, tekrar(Math.max(par.sx, par.sz) / 500), tekrar(par.sy / 1000))
         : duz && par.mat === 'tezgah'
           ? mat(rk, 'tezgah', ds.tezgah, tekrar(par.sx / 1200), tekrar(par.sz / 1200))
@@ -889,7 +963,8 @@ export function ciz(p, ops = {}) {
     let parca = [{ x: b.x0, y: b.y, z: b.z0, sx: b.x1 - b.x0, sy: TEZGAH_K, sz: b.z1 - b.z0 }];
     for (const e of kolonlar) parca = parca.flatMap(q => cikar(q, e));
     for (const q of parca) {
-      const tm = mat(renk.tezgah, 'tezgah', ds.tezgah, tekrar(q.sx / 1200), tekrar(q.sz / 1200));
+      const tgm = plakaSec ? null : gmHazirla(malzemeRenkten(renk.tezgah), q.sx, q.sz, q.sx >= q.sz ? 'u' : 'v'); // katalogdan gerçek tezgah malzemesi
+      const tm = tgm ? mat('', 'tezgah', '', 1, 1, tgm) : mat(renk.tezgah, 'tezgah', ds.tezgah, tekrar(q.sx / 1200), tekrar(q.sz / 1200));
       const tz = kutuEkle(kok, q.x, q.y, q.z, q.sx, q.sy, q.sz, tm, tk, true, p.ayar?.tezgahKenar === 'yuvarlak' ? Math.max(1.5, Math.min(14, TEZGAH_K / 2 - 2)) : 1.5);
       tz.raycast = () => {};
       // tezgah, dayandığı duvarın dolaplarıyla birlikte gizlenir (kenar çizgisi kok'a hemen ardından eklenir)
@@ -929,7 +1004,8 @@ export function ciz(p, ops = {}) {
   if (p.ayar?.arasi ?? 1) {
     const ad = ds.arasi && ds.arasi !== 'duz' ? ds.arasi : '', periyot = ad === 'mermer' ? 1200 : 600;
     const duzAm = mat(renk.arasi || '#e4e8e2', 'arasi');
-    const amYap = (uz, yuk) => ad ? mat(renk.arasi || '#e4e8e2', 'arasi', ad, tekrar(uz / periyot), tekrar(yuk / periyot)) : duzAm;
+    const arMd = malzemeRenkten(renk.arasi); // katalogdan gerçek kaplama (duvar seramiği, taş…)
+    const amYap = (uz, yuk) => { const g = gmHazirla(arMd, uz, yuk, 'v'); return g ? mat('', 'arasi', '', 1, 1, g) : ad ? mat(renk.arasi || '#e4e8e2', 'arasi', ad, tekrar(uz / periyot), tekrar(yuk / periyot)) : duzAm; };
     for (const b of tezgahlar(p)) {
       const y = b.y + TEZGAH_K, H = Math.min(560, oda.h - y), K = 10;
       if (H <= 0) continue;
@@ -1594,6 +1670,14 @@ export function fotoSahne({ W = 1200, H: Histenen = 0, aksam = false, spot = tru
 
   // Çizilmiş parçalar
   const fotoTex = plakaSec ? plaka(plakaSec.id).veri : null; // katalog tezgahının resmi (yüklüyse)
+  // Katalogdan gerçek malzemeler: motorun çoklu resim dokusu (malzeme kodu 100 + sıra). Resmi yüklenmemiş malzemede 0 döner.
+  const texler = [], texNo = new Map();
+  const fotoDokuKod = md => {
+    const v = md?.dokulu ? gercekDoku(md).veri : null;
+    if (!v) return 0;
+    if (!texNo.has(md.id)) { texNo.set(md.id, texler.length); texler.push({ w: v.w, h: v.h, d: v.d, en: md.en / 10, boy: md.boy / 10, g: md.parlak ? 1 : 0, dm: md.damar === 'y' ? 1 : md.damar === 'x' ? 2 : 0 }); }
+    return 100 + texNo.get(md.id);
+  };
   const bicim = [], daralma = [], egik = []; // dekor: cisim başına biçim ve koni daralması (kutularda boş kalır); eğik elipsoitlerin ek verisi
   const b3 = new THREE.Box3();
   const gorunur = o => { for (let a = o; a && a !== scene; a = a.parent) if (!a.visible) return false; return true; };
@@ -1612,9 +1696,10 @@ export function fotoSahne({ W = 1200, H: Histenen = 0, aksam = false, spot = tru
     const mt = o.material;
     if (!mt || !mt.color || mt.opacity === 0) return;
     const plakali = mt.userData.tur === 'tezgah' && String(mt.userData.desen).startsWith('plaka:');
-    const kod = mt === LED_MAT ? 9 : plakali ? (fotoTex ? 18 : 3) : fotoKod(mt.userData.tur, mt.userData.desen);
+    const gmd = mt.userData.md || null, gkod = gmd ? fotoDokuKod(gmd) : 0; // gerçek malzeme: doku varsa kutunun rengi ton çarpanıdır
+    const kod = mt === LED_MAT ? 9 : gkod ? gkod : plakali ? (fotoTex ? 18 : 3) : fotoKod(mt.userData.tur, gmd ? '' : mt.userData.desen);
     if (!kod) return;
-    const e = o.matrixWorld.elements, k = plakali && !fotoTex ? rk.set(plakaSec.renk) : mt.color;
+    const e = o.matrixWorld.elements, k = gmd && !gkod ? rk.set(gmd.renk) : plakali && !fotoTex ? rk.set(plakaSec.renk) : mt.color;
     if (o.userData.kutular) { // birleştirilmiş süsleme ağı: her kutu ayrı ayrı dünya koordinatına çevrilir
       const a = o.userData.kutular, v0 = new THREE.Vector3(), v1 = new THREE.Vector3();
       for (let i = 0; i < a.length; i += 6) {
@@ -1640,7 +1725,8 @@ export function fotoSahne({ W = 1200, H: Histenen = 0, aksam = false, spot = tru
   const kx = cam.position.x * 100, ky = cam.position.y * 100, kz = cam.position.z * 100;
   const icerde = kx > 0 && kx < ow && ky > 0 && ky < oh && kz > 0 && kz < od;
   const ds = proje.desen || {}, rn = proje.renk || {};
-  renkli([-K, -4, -K, ow + K, 0, od + K], rn.zemin || '#c9a77c', ds.zemin === 'parke' ? 7 : ds.zemin === 'mermer' || ds.zemin === 'karo' ? 15 : 10);
+  const zKod = fotoDokuKod(malzemeRenkten(rn.zemin)), dKod = fotoDokuKod(malzemeRenkten(rn.duvar)); // katalogdan gerçek zemin ve duvar
+  renkli([-K, -4, -K, ow + K, 0, od + K], zKod ? '#ffffff' : rn.zemin || '#c9a77c', zKod || (ds.zemin === 'parke' ? 7 : ds.zemin === 'mermer' || ds.zemin === 'karo' ? 15 : 10));
   renkli([-K, oh, -K, ow + K, oh + 4, od + K], '#fbfaf7', 13);
   // Dışarıdan bakışta oda açık renkli geniş bir zemine oturur (stüdyo zemini): gölgesi düşer, arka plan boşlukta kalmaz
   if (!icerde) renkli([-3000, -6, -3000, ow + 3000, -4.05, od + 3000], '#e3e5e8', 10);
@@ -1655,7 +1741,7 @@ export function fotoSahne({ W = 1200, H: Histenen = 0, aksam = false, spot = tru
   for (const ad of DUVAR_LISTE) {
     if (acik[ad]) continue;
     const L = ad === 'arka' || ad === 'on' ? ow : od;
-    for (const r of delikliDikler([{ a0: 0, a1: L, y0: 0, y1: oh }], delik[ad])) renkli(duvarKutu[ad](r), rn.duvar || '#f4f1ea', FOTO_DUVAR[ds.duvar] || 10); // duvar deseni fotoğrafa da taşınır
+    for (const r of delikliDikler([{ a0: 0, a1: L, y0: 0, y1: oh }], delik[ad])) renkli(duvarKutu[ad](r), dKod ? '#ffffff' : rn.duvar || '#f4f1ea', dKod || FOTO_DUVAR[ds.duvar] || 10); // duvar deseni fotoğrafa da taşınır
   }
   if (proje.ayar?.asmaTavan) { // duvar boyunca düşük kuşak
     const en = Math.min(50, ow / 3, od / 3), y = oh - 15;
@@ -1709,6 +1795,6 @@ export function fotoSahne({ W = 1200, H: Histenen = 0, aksam = false, spot = tru
     shp: yuvarlakVar ? Uint8Array.from({ length: N }, (_, i) => bicim[i] || 0) : null, shq: yuvarlakVar ? Float32Array.from({ length: N }, (_, i) => bicim[i] === 5 ? daralma[i] : daralma[i] || 1) : null, shx: egik.length ? new Float32Array(egik) : null,
     boxes: new Float32Array(out), n: out.length / 10,
     cam: { p: [kx, ky, kz], fw: fw.toArray(), rt: rt.toArray(), up: up.toArray(), W, H, F: (H / 2) / Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2) },
-    inside: icerde, sun: gunes, sunC: [3.4, 3.05, 2.6], exp: 1.15, led: aksam ? 40 : 12, seed: 1, pl, night: aksam, tex: fotoTex, texG: fotoTex && plakaSec.parlak ? 1 : 0, texS: fotoTex ? plakaSec.olcek : 320,
+    inside: icerde, sun: gunes, sunC: [3.4, 3.05, 2.6], exp: 1.15, led: aksam ? 40 : 12, seed: 1, pl, night: aksam, texler: texler.length ? texler : null, tex: fotoTex, texG: fotoTex && plakaSec.parlak ? 1 : 0, texS: fotoTex ? plakaSec.olcek : 320,
   };
 }

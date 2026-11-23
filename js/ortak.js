@@ -45,6 +45,8 @@ export function parcaRengi(p, m, r) {
   const taban = p.renk || tabanRenk(p, m, r);
   return p.ton && /^#[0-9a-f]{6}$/i.test(taban) ? koyult(taban, p.ton) : taban;
 }
+// Parçanın ton uygulanmamış rengi: katalogdan seçilmiş gerçek malzeme bu renkten tanınır (malzemeler.js: malzemeRenkten)
+export const parcaTabanRengi = (p, m, r) => p.renk || tabanRenk(p, m, r);
 function tabanRenk(p, m, r) {
   switch (p.mat) {
     case 'govde': return m.govdeRenk || r.govde;
