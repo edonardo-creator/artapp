@@ -1,7 +1,7 @@
 // 3B sahne: çizim, seçim ve sürükleme. Sahne kökü milimetre ölçeğindedir (0.001).
 import * as THREE from 'three';
 import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
-import { parcalar, TANIM, TEZGAH_K, TEZGAH_TASMA, KAPAK_K } from './moduller.js';
+import { parcalar, TANIM, TEZGAH_K, TEZGAH_TASMA, KAPAK_K, aksesuarBagla } from './moduller.js';
 import { donusum, yerelKutu, yon, kutu, engelMi, xEksenli, DUVAR_LISTE } from './yerlesim.js';
 import { kertilmisParcalar, cikar, KERTME_PAYI } from './kertme.js';
 import { tezgahSecimi } from './tezgahkatalog.js';
@@ -873,7 +873,10 @@ export function ciz(p, ops = {}) {
     const kapakCizgi = gercek && !km ? cizgi(0x0c0f13, 0.3) : null; // kapak ve çekmece araları ince gölge çizgisiyle okunur
     const yr = par => par.tur === 'kapak' ? 2.5 : par.tur === 'kulp' ? 4 : par.tur === 'cihaz' ? 4 : par.mat === 'tezgah' ? 1.5 : par.tur === 'dekor' ? 5 : 0;
     const acilis = [], eksenler = new Map(), susKova = new Map();
-    for (const par of kertilmisParcalar(m, p)) {
+    aksesuarBagla(p); // katalogdan takılan iç donanım gerçek biçimiyle üretilsin
+    const modulParcalari = kertilmisParcalar(m, p);
+    aksesuarBagla(null);
+    for (const par of modulParcalari) {
       if (durum.kapakGizle && (par.tur === 'kapak' || par.tur === 'kulp')) continue;
       if (ops.acilis && par.mentese && !ops.kapakAcik) {
         // Açılış üçgeni: tepe noktası menteşe tarafında

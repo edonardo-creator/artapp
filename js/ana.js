@@ -41,13 +41,14 @@ import { TAC_MODELLERI, tacAyari, tacResmi, tacRengi, taclar, tacCizgileri } fro
 import { FOTO_KALITE, fotoBaslat } from './foto.js';
 import { fotoCanli, sahneIzi } from './fotocanli.js';
 import { teklifSayfa, teklifGiris } from './teklif.js';
-import { AKSESUAR_GENEL, AKSESUAR_GRUPLARI, aksesuarAra, aksesuarKaydi, aksesuarListesi } from './aksesuarlar.js';
+import { AKSESUAR_GENEL, AKSESUAR_GRUPLARI, aksesuarAra, aksesuarKaydi, aksesuarListesi, aksesuarGrubu } from './aksesuarlar.js';
 import { donanimSecenekleri } from './moduller.js';
 import { tl } from './maliyet.js';
 import { URETIM_SECENEK, uretimAyari } from './uretim.js';
 import { TEZGAH_TEMEL, TEZGAH_MARKALARI, TEZGAH_GRUPLARI, TEZGAH_YUZEYLERI, tezgahListesi, tezgahSecimi, tezgahAdi } from './tezgahkatalog.js';
 import { kapakResmi, aksesuarResmi } from './katalogresim.js';
 import { kulpResmi } from './kulpresim.js';
+import { AKSESUAR_RENK } from './aksesuarmodel.js';
 import { montajSayfa } from './montaj.js';
 import { islemeSayfa, cncPaketi } from './islemefoy.js';
 import { camListesiCsv, modulKodListesiCsv, modulKodu } from './adeko.js';
@@ -1504,12 +1505,16 @@ function aksKatalogCiz() {
   }).join('') || '<p class="ipucu">Uygun ürün bulunamadı.</p>';
   $('#akListe').innerHTML = h;
   const secili = aksesuarListesi(P);
-  $('#akSecili').innerHTML = secili.length ? secili.map((x, i) => `<div class="akSatir${aksesuarResmi(x.g) ? ' resimli' : ''}">${aksesuarResmi(x.g) ? `<img src="${aksesuarResmi(x.g)}" alt="" loading="lazy">` : ''}<div><b>${kacis(x.ad)}</b><span>${kacis([x.kod, x.renk, x.modul && P.moduller.some(o => o.id === x.modul) ? 'dolaba takılı' : ''].filter(Boolean).join(' · '))}</span></div><em>${x.adet} adet${x.fiyat ? ' × ' + tl(x.fiyat) : ''}</em><button type="button" class="mini" data-ak-sil="${i}" title="Projeden çıkar">×</button></div>`).join('')
+  $('#akSecili').innerHTML = secili.length ? secili.map((x, i) => `<div class="akSatir${aksesuarResmi(x.g) ? ' resimli' : ''}">${aksesuarResmi(x.g) ? `<img src="${aksesuarResmi(x.g)}" alt="" loading="lazy">` : ''}<div><b>${kacis(x.ad)}</b><span>${kacis([x.kod, x.renk, x.modul && P.moduller.some(o => o.id === x.modul) ? 'dolaba takılı' : ''].filter(Boolean).join(' · '))}</span></div><em>${x.adet} adet${x.fiyat ? ' × ' + tl(x.fiyat) : ''}</em>${(aksesuarGrubu(x.g)?.[3] || []).filter(r => AKSESUAR_RENK[r]).length > 1 ? `<button type="button" class="mini akRenk" data-ak-renk="${i}" title="Rengi değiştir: çizimde ve teklifte bu renkle görünür"><i style="background:${AKSESUAR_RENK[x.renk] || '#888'}"></i>${kacis(x.renk || 'Renk')}</button>` : ''}<button type="button" class="mini" data-ak-sil="${i}" title="Projeden çıkar">×</button></div>`).join('')
     : '<p class="ipucu">Henüz aksesuar eklenmedi.</p>';
 }
 function aksKatalogTik(e) {
-  const g = e.target.closest('[data-ak-grup]'), ek = e.target.closest('[data-ak-ekle]'), sil = e.target.closest('[data-ak-sil]');
+  const g = e.target.closest('[data-ak-grup]'), ek = e.target.closest('[data-ak-ekle]'), sil = e.target.closest('[data-ak-sil]'), rn = e.target.closest('[data-ak-renk]');
   if (g) { akGrup = g.dataset.akGrup; aksKatalogCiz(); return; }
+  if (rn) { // ürünün katalogdaki renkleri arasında sırayla dolaşır
+    degistir(() => { const l = aksesuarListesi(P), x = l[Number(rn.dataset.akRenk)], renkler = (aksesuarGrubu(x?.g)?.[3] || []).filter(r => AKSESUAR_RENK[r]); if (x && renkler.length) { x.renk = renkler[(renkler.indexOf(x.renk) + 1) % renkler.length]; P.aksesuar = l; } });
+    aksKatalogCiz(); if (kagit === 'teklif') kagitYenidenKur(); return;
+  }
   if (sil) { aksesuarSil(Number(sil.dataset.akSil)); aksKatalogCiz(); return; }
   if (!ek) return;
   const [kimlik, sira] = ek.dataset.akEkle.split('|'), kayit = aksesuarKaydi(kimlik, Number(sira));

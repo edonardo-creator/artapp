@@ -5,6 +5,7 @@
 
 import { KAPAK_MODELLERI, kapakParcalari, kapakStili, camliMi, kulpsuzMu, camAyari } from './kapaklar.js';
 import { kulpParcaliMi, kulpParcalari } from './kulplar.js';
+import { aksesuarModeli, aksesuarParcalari } from './aksesuarmodel.js';
 
 // Atölye standartları. Projeye göre değişebilir: standartAyarla() ile güncellenir ve bu dosyayı
 // içe aktaran her yer yeni değeri görür (canlı bağlama). Varsayılanlar STANDART_VARSAYILAN'da.
@@ -294,6 +295,15 @@ export function donanimSecenekleri(tip) {
   return l ? Object.fromEntries(l.map(a => [a, DONANIMLAR[a]])) : null;
 }
 export const donanimAdi = m => (m.donanim && donanimSecenekleri(m.tip)?.[m.donanim]) || '';
+
+// Katalogdan dolaba takılmış aksesuarlar (modül kimliği → projedeki aksesuar kaydı). 3B çizim, parçaları üretmeden önce projeyi
+// bağlar ve iş bitince çözer (aksesuarBagla(null)): bağlıyken iç donanım ürünün gerçek biçimiyle (aksesuarmodel.js) üretilir.
+// Bağlı değilken (teknik çizim, montaj şablonu, kesim, maliyet) iç donanım eskisi gibi genel biçimiyle üretilir.
+let AKS_BAG = new Map();
+export function aksesuarBagla(p) {
+  AKS_BAG = new Map();
+  for (const x of Array.isArray(p?.aksesuar) ? p.aksesuar : []) if (x && x.modul && x.g) AKS_BAG.set(x.modul, x);
+}
 
 // Bir modülün tüm parçalarını üretir.
 // Parça: { ad, x, y, z, sx, sy, sz, mat, tur }  veya silindir: { sekil:'sil', x, y, z, r, h, mat, tur }
@@ -992,7 +1002,7 @@ export function parcalar(m) {
       break;
     }
   }
-  if (donanimli) { const bas = P.length; donanim(); donanimHareketi(bas); }
+  if (donanimli) { const bas = P.length, urun = AKS_BAG.get(m.id), ozel = urun ? urunDonanimi(urun) : null; if (ozel) urunHareketi(ozel, bas); else { donanim(); donanimHareketi(bas); } }
   // Katalogdan seçilmiş kulp: önce standart çubuk yerine konur, sonra o çubuğun durduğu yere göre seçilen modelin parçalarıyla
   // değiştirilir. Kulpun kapağı, aynı açılış (ya da çekilme) bilgisini taşıyan ön panel parçalarından bulunur.
   if (kulpYeni) for (let i = 0; i < P.length; i++) {
@@ -1007,6 +1017,22 @@ export function parcalar(m) {
     i += yeni.length - 1;
   }
   return P;
+
+  // Katalogdan takılmış ürün: gerçek biçimi (aksesuarmodel.js). Ürünün düzeni dolabın iç donanım türüne uymuyorsa null (genel biçim çizilir).
+  function urunDonanimi(urun) {
+    const md = aksesuarModeli(urun.g);
+    if (!md || !md.turler.includes(m.donanim)) return null;
+    const ust = TANIM[m.tip].sinif === 'ust', kapi = P.find(q => q.ad === 'Kapak' && q.tur === 'kapak'), kd = Math.min(m.kol || 560, w - 150, d - 150), cx0 = kd * 0.66;
+    return aksesuarParcalari(urun, { w, h, d, T, y0: (ust ? 0 : BAZA) + T, y1: h - T, z0: IC + 12, kapi: kapi ? { x0: kapi.x, x1: kapi.x + kapi.sx } : null,
+      mil: { x: m.korYon === 'sag' ? w - cx0 : cx0, z: kd * 0.66, r: Math.min(kd * 0.62, 330) }, sagda: m.korYon === 'sag', kapakYon: m.mentese });
+  }
+  // Ürünün parçaları eklenir; ön kapak mekanizmaya bağlıysa menteşeyle açılmaz, donanımla birlikte hareket eder
+  function urunHareketi(s, bas) {
+    const onler = P.slice(0, bas).filter(q => q.tur === 'kapak' || q.tur === 'kulp');
+    P.push(...s.parcalar);
+    if (s.kapakCek) for (const q of onler) { delete q.ac; delete q.mentese; q.cek = s.kapakCek; if (q.tur === 'kapak') q.onBagli = true; }
+    if (s.kapakAc) for (const q of onler) { delete q.mentese; q.ac = s.kapakAc; if (q.tur === 'kapak') q.onBagli = true; }
+  }
 
   // Dolap içi donanım parçaları (hepsi paslanmaz tel ya da koyu plastik; kertmeye ve ölçüye etkisi yok)
   function donanim() {

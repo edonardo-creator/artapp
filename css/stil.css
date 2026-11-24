@@ -680,3 +680,9 @@ body.vitrin #tuval { cursor: grab; }
   #renkKatalog > form > * { flex: none; }
   #renkKatalog .rkIzgara { flex: 1 1 0; max-height: none; min-height: 0; grid-auto-rows: max-content; align-content: start; } /* satırlar içerik boyunda kalır, liste kayar */
 }
+
+/* Aksesuar penceresi: takılı ürünün rengini değiştiren düğme */
+.akRenk { white-space: nowrap; }
+.akSatir:has(.akRenk) { grid-template-columns: 1fr auto auto auto; }
+.akSatir.resimli:has(.akRenk) { grid-template-columns: 40px 1fr auto auto auto; }
+.akRenk i { display: inline-block; width: 10px; height: 10px; border-radius: 50%; margin-right: 5px; vertical-align: -1px; border: 1px solid rgba(0, 0, 0, .28); }
