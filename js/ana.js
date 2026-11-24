@@ -1340,7 +1340,8 @@ function kulpKatalogCiz() {
   $('#kuBicim').innerHTML = kuGrup === 'Temel' ? '' : [['', 'Hepsi'], ...bicimler.map(b => [b, KULP_BICIMLERI[b]])].map(([b, ad]) => `<button type="button" data-ku-bicim="${b}" class="${b === kuBicim ? 'aktif' : ''}">${ad}</button>`).join('');
   $('#kuListe').innerHTML = liste.filter(k => !kuBicim || k[1] === kuBicim).map(k =>
     `<button type="button" class="kkKart${k[0] === secili ? ' secili' : ''}" data-ku="${k[0]}">${kulpResmi(k[0]) ? `<img src="${kulpResmi(k[0])}" alt="" loading="lazy" width="70" height="70">` : kulpOnizleme(k[0], renk)}<b>${kulpAdi(k[0])}</b></button>`).join(''); // katalog satırında resim, temel modellerde çizim
-  $('#kuRenk').innerHTML = KULP_RENKLERI.map(r => `<button type="button" data-ku-renk="${r[2]}" class="${r[2].toLowerCase() === String(P.renk.kulp || '').toLowerCase() ? 'aktif' : ''}"><i style="background:${r[2]}"></i>${r[1]}</button>`).join('');
+  // "Kendi rengi": her kulp katalogdaki kendi kaplamasıyla çizilir (kulpmodel.js); bir renk seçilirse bütün kulplar o renge döner
+  $('#kuRenk').innerHTML = `<button type="button" data-ku-renk="" class="${P.renk.kulp ? '' : 'aktif'}" title="Her kulp katalogdaki kendi kaplamasıyla çizilir"><i style="background:linear-gradient(135deg,#D2D5D8 0 34%,#8E6E3E 34% 67%,#1A1A1C 67%)"></i>Kendi rengi</button>` + KULP_RENKLERI.map(r => `<button type="button" data-ku-renk="${r[2]}" class="${r[2].toLowerCase() === String(P.renk.kulp || '').toLowerCase() ? 'aktif' : ''}"><i style="background:${r[2]}"></i>${r[1]}</button>`).join('');
 }
 function kulpKatalogTik(e) {
   const g = e.target.closest('[data-ku-grup]'), b = e.target.closest('[data-ku-bicim]'), r = e.target.closest('[data-ku-renk]'), k = e.target.closest('[data-ku]');
@@ -2474,7 +2475,7 @@ try { if (!location.hash && localStorage.getItem('kurgu.foto.v1') === '1' && !wi
 
 // Sınama ve hata ayıklama için
 window.kurgu = { get proje() { return P; }, esitle, esitDurum, kopyala: modulKopyala, yapistir: modulYapistir, ayna: aynaKopya,
-  kare: n => sahne.kareOlc(n),
+  kare: n => sahne.kareOlc(n), bakis: b => b ? sahne.bakisKoy(b) : sahne.bakisAl(), // bakış: kameranın yeri ve hedefi (metre); deneme ve hata ayıklama için
   // n kez tam yenileme yapıp ortalama süreyi (ms) döndürür; hız ölçümü için
   olc: (n = 20) => { const t = performance.now(); for (let i = 0; i < n; i++) guncelle(); return Math.round((performance.now() - t) / n * 10) / 10; }, ekran: (x, y, z) => sahne.ekranNoktasi(x, y, z), sihirbaz: (tip, ada, w, d, h = 2700) => {
   const f = $('#sihirbaz form');

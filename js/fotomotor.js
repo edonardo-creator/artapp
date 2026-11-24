@@ -17,6 +17,9 @@
 //   sun: güneşe doğru birim vektör, sunC: güneş rengi, exp: gökyüzü parlaklık çarpanı, led: ışık veren yüzeylerin şiddeti
 //   pl: nokta ışıklar, ışık başına 7 sayı: x y z r g b şiddet; seed: rastgele sayı tohumu
 //   tex: { w, h, d: Uint8Array RGB } ya da null (malzeme 18 için resim dokusu), texS: dokunun yinelenme boyu (cm), texG: doku parlak mı
+//   kbi: Int32Array ya da null (ARTAPP eki), kutu başına kapak kabartması: 0 yok; (sıra + 1) + 65536 (yerel sağ yönü dünyada ters) +
+//        131072 (ön yüz eksenin eksi yönüne bakıyor). kab: [{ w, h, e: Int8Array (piksel başına sağa ve yukarı eğim × 90), t: Uint8Array
+//        (gölge: 255 açık) }]. Kabartma kutunun ince ekseni yönündeki ön yüzüne, yüzün tamamına yayılarak uygulanır; satır 0 alttadır.
 //   texler: [{ w, h, d: Uint8Array RGB, en, boy: dokunun gerçek ölçüsü (cm), g: parlak mı, dm: resimdeki damar yönü (1 düşey, 2 yatay, 0 yok) }] ya da null
 //     (ARTAPP eki: katalogdan gerçek malzemeler; malzeme kodu 100 + sıra. Kutunun rengi dokuyla çarpılır: beyaz, dokunun kendi rengidir.
 //      Dik yüzeyde damar düşey, yatay yüzeyde x ekseni boyunca uzanacak biçimde resim gerekirse çeyrek tur döndürülür.)
@@ -107,7 +110,7 @@ export function makeTracer(SC){
   return L(L(L(hsh(X,Y,Z),hsh(X+1,Y,Z),u),L(hsh(X,Y+1,Z),hsh(X+1,Y+1,Z),u),v),L(L(hsh(X,Y,Z+1),hsh(X+1,Y,Z+1),u),L(hsh(X,Y+1,Z+1),hsh(X+1,Y+1,Z+1),u),v),w)};
  const wood=(u,v,w)=>{const n=vn(u*.012,v*.18,w*.18),r=Math.sin((v*1.25+w*.7+n*10+vn(u*.003,v*.04,w*.04)*16))*.5+.5,fine=vn(u*.5,v*4,w*4),pore=vn(u*.08,v*9,w*9);return .66+.27*Math.pow(r,.6)+.09*fine-.05*pore};
  // malzeme: albedo + parlaklık
- const M=new Float32Array(6),TX=SC.tex||null,TXL=SC.texler||null,LUT=new Float32Array(256);for(let i=0;i<256;i++)LUT[i]=Math.pow(i/255,2.2);// r g b sp rough metal
+ const M=new Float32Array(6),TX=SC.tex||null,TXL=SC.texler||null,KBI=SC.kbi||null,KAB=SC.kab||null,LUT=new Float32Array(256);for(let i=0;i<256;i++)LUT[i]=Math.pow(i/255,2.2);// r g b sp rough metal
  const surf=(q,px,py,pz,ax)=>{const mat=BX[q+9];let ar=BX[q+6],ag=BX[q+7],ab=BX[q+8],rough=.6,sp=.03,metal=0;
   if(mat==2||mat==12||mat==7){let f;
    if(mat==7){const row=Math.floor(pz/19),off=hsh(row,7,3)*140,seg=Math.floor((px+off)/140),vv=.86+.24*hsh(seg,row,11);f=wood(px+off,pz*1.7,py)*vv;const fr=(pz/19)-row,fs=((px+off)/140)-seg;if(fr<.02||fs<.006)f*=.55;sp=.05;rough=.25}
@@ -145,6 +148,16 @@ export function makeTracer(SC){
   else{sp=0;rough=1}
   if(!hC&&(mat==1||mat==2||mat==12)){let e=1;for(let a=0;a<3;a++){if(a==ax)continue;const lo=BX[q+a],hi=BX[q+3+a];if(hi-lo<1.2)continue;const p=a==0?px:a==1?py:pz,d=Math.min(p-lo,hi-p);if(d<.35)e=Math.min(e,.42+.58*d/.35)}ar*=e;ag*=e;ab*=e}
   M[0]=ar;M[1]=ag;M[2]=ab;M[3]=sp;M[4]=rough;M[5]=metal};
+ // ARTAPP eki: kapak kabartması. Kutunun ön yüzünde yüzey yönü kabartmanın eğimiyle yatırılır (kbX, kbY, kbZ), oyuklar koyulaşır (kbT).
+ // nx, ny, nz: yüzeyin kabartmasız yönü. Kabartma yoksa yön aynen döner, kbT 1 olur.
+ let kbT=1,kbX=0,kbY=0,kbZ=0;
+ const kabar=(q,px,py,pz,nx,ny,nz)=>{kbT=1;kbX=nx;kbY=ny;kbZ=nz;if(!KBI||hC||hA==1)return;const kv=KBI[hI];if(!kv||(hS<0)!=(((kv>>17)&1)==1))return;
+  const K=KAB[(kv&65535)-1],ua=hA==0?2:0,lo=BX[q+ua],hi=BX[q+3+ua],mir=(kv>>16)&1;
+  let u=((ua==0?px:pz)-lo)/(hi-lo);const v=(py-BX[q+1])/(BX[q+4]-BX[q+1]);if(mir)u=1-u;
+  const fx=Math.min(K.w-1.001,Math.max(0,u*K.w-.5)),fy=Math.min(K.h-1.001,Math.max(0,v*K.h-.5)),x0=fx|0,y0=fy|0,au=fx-x0,av=fy-y0,i00=y0*K.w+x0,i10=i00+1,i01=i00+K.w,i11=i01+1,w00=(1-au)*(1-av),w10=au*(1-av),w01=(1-au)*av,w11=au*av;
+  const ex=(K.e[i00*2]*w00+K.e[i10*2]*w10+K.e[i01*2]*w01+K.e[i11*2]*w11)/90,ey=(K.e[i00*2+1]*w00+K.e[i10*2+1]*w10+K.e[i01*2+1]*w01+K.e[i11*2+1]*w11)/90;
+  kbT=(K.t[i00]*w00+K.t[i10]*w10+K.t[i01]*w01+K.t[i11]*w11)/255;
+  let mx=nx,my=ny+ey,mz=nz;if(ua==0)mx+=mir?-ex:ex;else mz+=mir?-ex:ex;const ml=Math.hypot(mx,my,mz);kbX=mx/ml;kbY=my/ml;kbZ=mz/ml};
  const sunD=SC.sun,sunC=SC.sunC,cam=SC.cam,EX=SC.exp||1,LE=SC.led||7;
  const INS=SC.inside,NIGHT=SC.night,env=(dx,dy,dz)=>{if(NIGHT){if(dy<0)return[.012,.012,.012];const az=Math.atan2(dz,dx),th=.03+.11*vn(az*7+3,1,1)+.05*vn(az*23,2,2);if(dy<th)return[.012*EX,.02*EX,.012*EX];const t=Math.min(1,dy*2.2);return[(.85*(1-t)+.06*t)*.55*EX,(.48*(1-t)+.09*t)*.55*EX,(.26*(1-t)+.2*t)*.55*EX]}if(dy<0)return[.34*EX,.33*EX,.31*EX];const t=Math.pow(dy,.6);return[(1.05-.25*t)*EX,(1.06-.18*t)*EX,(1.08+.05*t)*EX]};
  const res=new Float32Array(3),BP=new Float64Array(3),BN=new Float64Array(3),PL=SC.pl||[],NP=PL.length/7;
@@ -158,12 +171,13 @@ export function makeTracer(SC){
    if(!cv&&mat!=7&&mat!=10&&mat!=13&&mat!=14&&mat!=15&&mat!=17&&mat!=9&&mat!=5){BP[0]=px;BP[1]=py;BP[2]=pz;BN[0]=nx;BN[1]=ny;BN[2]=nz;let ch=0;
     for(let a=0;a<3;a++){if(a==hA)continue;const lo=BX[q+a],hi=BX[q+3+a],sz=hi-lo,r=Math.min(.45,sz*.3);if(r<.06)continue;const d0=BP[a]-lo,d1=hi-BP[a];if(d0<r){BN[a]-=(1-d0/r)*.9;ch=1}else if(d1<r){BN[a]+=(1-d1/r)*.9;ch=1}}
     if(ch){const l=Math.hypot(BN[0],BN[1],BN[2]);nx=BN[0]/l;ny=BN[1]/l;nz=BN[2]/l}}
+   kabar(q,px,py,pz,nx,ny,nz);const kT=kbT;if(dx*kbX+dy*kbY+dz*kbZ<-.03){nx=kbX;ny=kbY;nz=kbZ}/* ARTAPP eki: kapak kabartması */
    if(mat==9){if(spec){lr+=tr*BX[q+6]*LE;lg+=tg*BX[q+7]*LE;lb+=tb*BX[q+8]*LE}break}
    if(mat==5){const c=-(dx*nx+dy*ny+dz*nz),F=.04+.96*Math.pow(1-Math.abs(c),5);
     if(rnd()<F+.05){const k=2*(dx*nx+dy*ny+dz*nz);dx-=k*nx;dy-=k*ny;dz-=k*nz;ox=px+nx*.02;oy=py+ny*.02;oz=pz+nz*.02}
     else{tr*=.8*BX[q+6]+.2;tg*=.84*BX[q+7]+.16;tb*=.86*BX[q+8]+.14;ox=px+dx*.03;oy=py+dy*.03;oz=pz+dz*.03}
     continue}
-   surf(q,px,py,pz,hA);const ar=M[0],ag=M[1],ab=M[2],sp=M[3],rough=M[4],metal=M[5];
+   surf(q,px,py,pz,hA);const ar=M[0]*kT,ag=M[1]*kT,ab=M[2]*kT,sp=M[3],rough=M[4],metal=M[5];
    const cosi=-(dx*nx+dy*ny+dz*nz),Fr=metal?1:sp+(1-sp)*Math.pow(1-Math.max(0,cosi),5)*.5;
    let dWt=1;
    if(!metal&&(rough>=.1||BX[q+9]==6)&&Fr>0){// yarı mat lake: yansımayı tek örnekle ekle, rastgele seçme (daha az karıncalanma)
@@ -207,7 +221,9 @@ export function makeTracer(SC){
    for(let k=0;k<4;k++){if(!isect(ox,oy,oz,dx,dy,dz,1e6))break;const q=hI*10,mat=BX[q+9],px=ox+dx*hT,py=oy+dy*hT,pz=oz+dz*hT;tt+=hT;
     if(mat==5||(mat==13&&!INS)){ox=px+dx*.05;oy=py+dy*.05;oz=pz+dz*.05;continue}
     if(mat==9){out[o]=out[o+1]=out[o+2]=1}else{surf(q,px,py,pz,hA);out[o]=Math.max(.02,M[0]);out[o+1]=Math.max(.02,M[1]);out[o+2]=Math.max(.02,M[2]);if(M[5]){out[o]=out[o+1]=out[o+2]=Math.max(.05,(M[0]+M[1]+M[2])/3)}}
-    if(hC){out[o+3]=hNx;out[o+4]=hNy;out[o+5]=hNz}else{out[o+3]=hA==0?hS:0;out[o+4]=hA==1?hS:0;out[o+5]=hA==2?hS:0}out[o+6]=tt;break}}
+    if(hC){out[o+3]=hNx;out[o+4]=hNy;out[o+5]=hNz}else{out[o+3]=hA==0?hS:0;out[o+4]=hA==1?hS:0;out[o+5]=hA==2?hS:0}
+    if(KBI&&mat!=9){kabar(q,px,py,pz,out[o+3],out[o+4],out[o+5]);if(kbT!=1||kbX!=out[o+3]||kbY!=out[o+4]||kbZ!=out[o+5]){out[o]*=kbT;out[o+1]*=kbT;out[o+2]*=kbT;out[o+3]=kbX;out[o+4]=kbY;out[o+5]=kbZ}}/* ARTAPP eki */
+    out[o+6]=tt;break}}
   return out};
  return{tile,gbuf}}
 

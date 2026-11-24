@@ -143,14 +143,19 @@ export function kulpBilgisi(kod) {
   return { kod: 'cubuk', ad: GENEL.cubuk[1], bicim: 'bar', boy: 160, grup: 'Temel' };
 }
 export const kulpAdi = kod => kulpBilgisi(kod).ad;
+// Katalog satırı ([kod, biçim, boy, grup, aile, ölçü etiketi]); genel modellerde null
+export const kulpSatiri = kod => KAT[kod] || null;
 // Parça üreten model mi (boy, gola ve kulpsuz dışındakiler)
 export const kulpParcaliMi = kod => !['boy', 'gola', 'yok'].includes(kulpBilgisi(kod).bicim);
 
 // Kulpun parçaları. (a0, b0)–(a1, b1): standart 16 cm çubuğun kapak üstündeki yeri (dikey ya da yatay); (X0, Y0)–(X1, Y1): kapak;
 // z: kapağın ön yüzü. Kulp bu yerin ortasına göre kendi boyunda kurulur; kapağa sığmazsa kısalır, kenar profili kapağın kenarına oturur.
 // Dönen parçalar: { ad: 'Kulp', x, y, z, sx, sy, sz, mat, tur: 'kulp' }; ilk parçada kulpKod, sonrakilerde kulpEk (hırdavat sayımı için).
+// İlk parçada ayrıca kulpYer bulunur ({ cu, cv, L, dikey, z }: kulpun ortası (boyunca ve enine), boyu ve duruşu): 3B çizim kulpu bu
+// yere gerçek biçimiyle (kulpmodel.js) koyar; kutular teknik çizimde, işleme föyünde ve hırdavat sayımında kullanılmaya devam eder.
 export function kulpParcalari(kod, { a0, b0, a1, b1, X0, Y0, X1, Y1, z }) {
   const b = kulpBilgisi(kod), s = b.bicim, dikey = b1 - b0 > a1 - a0, mx = (a0 + a1) / 2, my = (b0 + b1) / 2, P = [];
+  const son = yer => { if (P.length) P[0].kulpYer = { ...yer, z }; return P; };
   const k = (x, y, dz, sx, sy, sz, mat = 'kulp', ek = null) => { if (sx > 0 && sy > 0 && sz > 0) P.push({ ad: 'Kulp', x, y, z: z + dz, sx, sy, sz, mat, tur: 'kulp', ...(P.length ? { kulpEk: true } : { kulpKod: b.kod }), ...ek }); };
   const sinirla = (c, L, lo, hi) => Math.min(Math.max(c, lo + L / 2 + 30), hi - L / 2 - 30);
   // u: kulp boyunca, v: enine. Kutuyu kapak düzleminde (u, v) ölçüleriyle, ortası (cu, cv) olacak biçimde koyar
@@ -159,40 +164,41 @@ export function kulpParcalari(kod, { a0, b0, a1, b1, X0, Y0, X1, Y1, z }) {
     const d = Math.min(45, Math.max(22, b.boy));
     if (s === 'knob') { k(mx - d * 0.3, my - d * 0.3, 0, d * 0.6, d * 0.6, 12); k(mx - d / 2, my - d / 2, 10, d, d, 14); }
     else { k(mx - d / 2, my - d / 2, 0, d, d, 8); k(mx - d * 0.42, my - d * 0.95, 8, d * 0.84, d * 0.9, 6, 'kulp'); k(mx - d * 0.24, my - d * 0.8, 8.5, d * 0.48, d * 0.6, 6, 'koyu'); }
-    return P;
+    return son({ cu: mx, cv: my, L: b.boy, dikey: false });
   }
   const uzun = dikey ? Y1 - Y0 : X1 - X0;
   if (s === 'tir') { // kenar profil: kapağın en yakın kenarına oturan 12 mm'lik profil
     const L = Math.max(40, Math.min(b.boy, uzun - 80));
-    if (dikey) { const c = sinirla(my, L, Y0, Y1), solda = mx < (X0 + X1) / 2; k(solda ? X0 : X1 - 12, c - L / 2, 0, 12, L, 12); }
-    else { const c = sinirla(mx, L, X0, X1), altta = my < (Y0 + Y1) / 2; k(c - L / 2, altta ? Y0 : Y1 - 12, 0, L, 12, 12); }
-    return P;
+    if (dikey) { const c = sinirla(my, L, Y0, Y1), solda = mx < (X0 + X1) / 2; k(solda ? X0 : X1 - 12, c - L / 2, 0, 12, L, 12); return son({ cu: c, cv: solda ? X0 + 6 : X1 - 6, L, dikey }); }
+    const c = sinirla(mx, L, X0, X1), altta = my < (Y0 + Y1) / 2; k(c - L / 2, altta ? Y0 : Y1 - 12, 0, L, 12, 12);
+    return son({ cu: c, cv: altta ? Y0 + 6 : Y1 - 6, L, dikey });
   }
   const T = { bar: 12, bow: 14, u: 14, flat: 24, classic: 18, cup: 34 }[s] || 14;
   const L = Math.max(30, Math.min(b.boy, uzun - 80)), cu = dikey ? sinirla(my, L, Y0, Y1) : sinirla(mx, L, X0, X1), cv = dikey ? mx : my;
-  if (s === 'flat') { koy(cu, cv, L, T, 0, 14); return P; } // yassı profil: kapağa yapışık geniş şerit
+  const yer = { cu, cv, L, dikey };
+  if (s === 'flat') { koy(cu, cv, L, T, 0, 14); return son(yer); } // yassı profil: kapağa yapışık geniş şerit
   if (s === 'cup') { // kepçe: yarım kabuk; altı (dikeyde yanı) oyuk görünür
     koy(cu, cv, L, T, 0, 22);
     koy(cu, cv - T * 0.22, L * 0.8, T * 0.4, 21, 1.5, 'koyu');
-    return P;
+    return son(yer);
   }
   const ayak = Math.min(L * 0.5 - 6, Math.max(10, L * 0.1)); // ayakların uçtan uzaklığı
   if (s === 'u') { // köşeli: uçlarda ayak, arada düz çubuk
     koy(cu, cv, L, T, 14, 12);
     koy(cu - L / 2 + T / 2, cv, T, T, 0, 14, 'kulp'); koy(cu + L / 2 - T / 2, cv, T, T, 0, 14, 'kulp');
-    return P;
+    return son(yer);
   }
   if (s === 'bow') { // kavisli: uçlar alçak, orta yüksek (üç basamak)
     koy(cu, cv, L * 0.56, T, 16, 12);
     koy(cu - L * 0.36, cv, L * 0.2, T, 9, 12, 'kulp'); koy(cu + L * 0.36, cv, L * 0.2, T, 9, 12, 'kulp');
     koy(cu - L / 2 + 6, cv, 12, T, 0, 12, 'kulp'); koy(cu + L / 2 - 6, cv, 12, T, 0, 12, 'kulp');
-    return P;
+    return son(yer);
   }
   // çubuk ve porselenli klasik: iki ayak üstünde çubuk
   koy(cu, cv, L, T, 14, 12);
   koy(cu - L / 2 + ayak, cv, 10, Math.min(10, T), 0, 14, 'kulp'); koy(cu + L / 2 - ayak, cv, 10, Math.min(10, T), 0, 14, 'kulp');
   if (s === 'classic') koy(cu, cv, L * 0.5, T + 4, 13, 14, 'seramik', { renk: '#F1EDE3' }); // ortada porselen tutamak
-  return P;
+  return son(yer);
 }
 
 // Kulpun küçük resmi: ön görünüş (yatay duruşta), kendi çizimimiz

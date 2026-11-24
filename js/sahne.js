@@ -9,6 +9,9 @@ import { dekorUret } from './dekor.js';
 import { tezgahlar, parcaRengi, parcaTabanRengi, koyult, adaEkleri, supurgelikler, tezgahSupurgelikleri, tezgahDamlaliklari, delikliDikler } from './ortak.js';
 import { malzemeRenkten, malzemeDokusu, dokuYerlesimi } from './malzemeler.js';
 import { taclar, tacKutulari } from './tac.js';
+import { kulpAgi } from './kulpmodel.js';
+import { kabartmaHaritasi } from './kapakkabartma.js';
+import { kulpSatiri } from './kulplar.js';
 
 const KUTU = new THREE.BoxGeometry(1, 1, 1);
 const KENAR = new THREE.EdgesGeometry(KUTU);
@@ -584,6 +587,78 @@ function kutuEkle(grup, x, y, z, sx, sy, sz, malzeme, kenarMat, golge = true, r 
   return mesh;
 }
 
+// ---- Kapak kabartması -----------------------------------------------------------
+// Lake kapağın ön yüzündeki oyma (kapakkabartma.js) iki dokuyla çizilir: yüzey yönü haritası kapağın ön yüz malzemesine eklenir
+// (ışık oymayı gerçek gibi okutur), oyukların gölgesi kapağın hemen önündeki saydam bir örtüyle verilir (kapağın rengi ya da
+// katalog dokusu ne olursa olsun çalışır). Dokular model ve kapak ölçüsü başına bir kez üretilir.
+const kabDoku = new Map(), kabMat = new Map(), ORTU = new THREE.PlaneGeometry(1, 1);
+function kabartmaDokusu(h) {
+  let d = kabDoku.get(h.anahtar);
+  if (d) return d;
+  if (kabDoku.size > 120) { for (const e of kabDoku.values()) { e.n.dispose(); e.t.dispose(); e.ortu.dispose(); } kabDoku.clear(); for (const e of kabMat.values()) e.dispose(); kabMat.clear(); }
+  const hazirla = t => { t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter; t.generateMipmaps = true; t.anisotropy = 4; t.needsUpdate = true; return t; };
+  const a = new Uint8Array(h.W * h.H * 4);
+  for (let i = 0; i < h.ton.length; i++) { a[i * 4] = a[i * 4 + 1] = a[i * 4 + 2] = 255 - h.ton[i]; a[i * 4 + 3] = 255; }
+  const n = hazirla(new THREE.DataTexture(h.nrm, h.W, h.H, THREE.RGBAFormat)), t = hazirla(new THREE.DataTexture(a, h.W, h.H, THREE.RGBAFormat));
+  d = { n, t, ortu: new THREE.MeshBasicMaterial({ color: 0x000000, alphaMap: t, transparent: true, depthWrite: false, polygonOffset: true, polygonOffsetFactor: -1, polygonOffsetUnits: -1 }) };
+  kabDoku.set(h.anahtar, d);
+  return d;
+}
+// ag: kapağın kutu ağı (kutuEkle çıktısı). Ön yüz (+z) kabartmalı malzemeyle, öbür yüzler olduğu gibi çizilir.
+function kabartmaUygula(ag, par) {
+  const h = kabartmaHaritasi(par.kabartma.kod, par.sx, par.sy, { alt: par.kabartma.alt, ayna: par.mentese === 'sag' });
+  if (!h) return;
+  const d = kabartmaDokusu(h), taban = ag.material, a = taban.uuid + '|' + h.anahtar;
+  let mk = kabMat.get(a);
+  if (!mk) {
+    mk = taban.clone(); mk.normalMap = d.n; mk.userData = { ...taban.userData, kab: h }; // fotoğraf dökümü kabartmayı buradan tanır
+    if (kabMat.size > 400) { for (const e of kabMat.values()) e.dispose(); kabMat.clear(); }
+    kabMat.set(a, mk);
+  }
+  ag.material = [taban, taban, taban, taban, mk, taban];
+  const ortu = new THREE.Mesh(ORTU, d.ortu);
+  ortu.scale.set(par.sx, par.sy, 1); ortu.position.set(ag.position.x, ag.position.y, ag.position.z + par.sz / 2 + 0.12);
+  ortu.raycast = () => {}; ortu.userData.ortu = true; ortu.renderOrder = 1;
+  ag.parent.add(ortu);
+}
+
+// ---- Gerçek biçimli kulplar -----------------------------------------------------
+// Kulpun ağı kulpmodel.js'ten gelir (u boyunca, v enine, w kapaktan dışarı; mm). Geometri kulp ve boy başına bir kez kurulur ve
+// çizimler arasında saklanır. Parçalar malzemelerine göre ayrı ağlardır: metal gövde, porselen ya da ahşap bölüm, koyu oyuk.
+const kulpGeo = new Map(), KULP_TUR = { kulp: 'kulp', seramik: 'seramik', mat: 'govde', koyu: 'koyu' };
+function kulpGeometri(kod, L) {
+  const a = kod + '|' + Math.round(L);
+  let s = kulpGeo.get(a);
+  if (s === undefined) {
+    const ag = kulpAgi(kod, L, kulpSatiri(kod));
+    s = ag ? { renk: ag.renk, noktasal: ag.noktasal, parcalar: ag.parcalar.map(p => {
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.BufferAttribute(p.pos, 3)); geo.setAttribute('normal', new THREE.BufferAttribute(p.norm, 3));
+      geo.computeBoundingBox(); geo.computeBoundingSphere();
+      return { tur: p.tur, renk: p.renk, geo };
+    }) } : null;
+    if (kulpGeo.size > 300) { for (const e of kulpGeo.values()) e?.parcalar.forEach(p => p.geo.dispose()); kulpGeo.clear(); }
+    kulpGeo.set(a, s);
+  }
+  return s;
+}
+// yer: { cu, cv, L, dikey, z } (kulplar.js: kulpYer). secili: projede seçilmiş kulp rengi (boşsa kulpun katalogdaki kaplaması);
+// yedek: ikisi de yoksa kullanılacak renk. Kulpun modeli yoksa false döner (kutular çizilir).
+function kulpEkle(grup, kod, yer, dx, dy, dz, secili, yedek) {
+  const s = kulpGeometri(kod, yer.L);
+  if (!s) return false;
+  const yatik = yer.dikey && !s.noktasal, kati = doluMod();
+  for (const p of s.parcalar) {
+    const ag = new THREE.Mesh(p.geo, mat(p.renk || secili || s.renk || yedek, KULP_TUR[p.tur] || 'kulp'));
+    ag.position.set((yatik ? yer.cv : yer.cu) + dx, (yatik ? yer.cu : yer.cv) + dy, yer.z + dz);
+    if (yatik) ag.rotation.z = Math.PI / 2;
+    ag.castShadow = ag.receiveShadow = kati;
+    ag.userData.dilim = 0.5; // fotoğraf dökümü kulpu yarım santimlik dilimlerle okur
+    grup.add(ag);
+  }
+  return true;
+}
+
 // ---- Sahne dekoru ---------------------------------------------------------------
 // dekor.js'in ürettiği cisimler (kutu, elipsoit, silindir, kesik koni) çizilir. Aynı biçim ve malzemedeki cisimler tek çizim
 // çağrısında toplanır (InstancedMesh), renk cisim başına verilir. Duvara dayalı gruplar o duvarın dolaplarıyla birlikte gizlenir.
@@ -811,6 +886,28 @@ export function ciz(p, ops = {}) {
           acilis.push(xo, par.y, z, xh, ym, z, xh, ym, z, xo, par.y + par.sy, z);
         }
       }
+      if (par.tur === 'kulp' && par.mat === 'kulp' && !par.sekil) { // gerçek biçimli kulp: kutuların yerine modelin ağı çizilir
+        if (par.kulpEk) continue; // çok parçalı kulpun yardımcı kutuları
+        const yer = par.kulpYer || (par.sz === 26 && !par.kulpKod ? { dikey: par.sy > par.sx, L: Math.max(par.sx, par.sy), z: par.z,
+          cu: par.sy > par.sx ? par.y + par.sy / 2 : par.x + par.sx / 2, cv: par.sy > par.sx ? par.x + par.sx / 2 : par.y + par.sy / 2 } : null);
+        if (yer) {
+          let ana = g, dx = ops.kapakAcik && par.kay ? par.kay : 0, dy = 0, dz = ops.kapakAcik && par.cek ? par.cek : 0;
+          if (ops.kapakAcik && par.ac) { // kapağıyla birlikte açılır
+            const a = par.ac, ust = a.yon === 'ust', anahtar = a.x + '|' + a.z + '|' + a.yon + (ust ? '|' + a.y : '');
+            let eksen = eksenler.get(anahtar);
+            if (!eksen) {
+              eksen = new THREE.Group();
+              eksen.position.set(ust ? 0 : a.x, ust ? a.y : 0, a.z);
+              if (ust) eksen.rotation.x = -1.2; else eksen.rotation.y = a.aci ?? (a.yon === 'sol' ? -1.75 : 1.75);
+              eksenler.set(anahtar, eksen);
+              g.add(eksen);
+            }
+            ana = eksen; dx = ust ? 0 : -a.x; dy = ust ? -a.y : 0; dz = -a.z;
+          }
+          if (kulpEkle(ana, par.kulpKod || (m.kulp === 'boy' ? 'boy' : 'cubuk'), yer, dx, dy, dz, proje.renk?.kulp || '', renkBul(par, m))) continue;
+        }
+      }
+      if (par.kab && doluMod()) continue; // kabartmalı kapağın süsleme kutuları: oyma kabartmayla çizilir
       if (par.sus && !par.sekil) { // süsleme: modül ve malzeme başına birleştirilmiş tek ağda toplanır
         let ana = g, ox = par.x + (ops.kapakAcik && par.kay ? par.kay : 0), oy = par.y, oz = par.z + (ops.kapakAcik && par.cek ? par.cek : 0);
         if (ops.kapakAcik && par.ac) { // kapağıyla birlikte açılır
@@ -892,10 +989,12 @@ export function ciz(p, ops = {}) {
           eksenler.set(anahtar, eksen);
           g.add(eksen);
         }
-        kutuEkle(eksen, ust ? par.x : par.x - a.x, ust ? par.y - a.y : par.y, par.z - a.z, par.sx, par.sy, par.sz, malzeme, par.tur === 'kulp' ? null : km || (par.tur === 'kapak' ? kapakCizgi : null), true, yr(par));
+        const kag = kutuEkle(eksen, ust ? par.x : par.x - a.x, ust ? par.y - a.y : par.y, par.z - a.z, par.sx, par.sy, par.sz, malzeme, par.tur === 'kulp' ? null : km || (par.tur === 'kapak' ? kapakCizgi : null), true, yr(par));
+        if (par.kabartma && doluMod()) kabartmaUygula(kag, par);
       } else {
         const cek = ops.kapakAcik && par.cek ? par.cek : 0, kay = ops.kapakAcik && par.kay ? par.kay : 0;
-        kutuEkle(g, par.x + kay, par.y, par.z + cek, par.sx, par.sy, par.sz, malzeme, par.tur === 'kulp' ? null : km || (par.tur === 'kapak' || par.tur === 'cihaz' ? kapakCizgi : null), true, yr(par));
+        const kag = kutuEkle(g, par.x + kay, par.y, par.z + cek, par.sx, par.sy, par.sz, malzeme, par.tur === 'kulp' ? null : km || (par.tur === 'kapak' || par.tur === 'cihaz' ? kapakCizgi : null), true, yr(par));
+        if (par.kabartma && doluMod()) kabartmaUygula(kag, par);
       }
     }
     for (const kova of susKova.values()) { // toplanan süslemeler: malzeme başına tek ağ
@@ -1623,7 +1722,7 @@ function fotoDilimle(o) {
   for (let e = 0; e < 3; e++) {
     const boy = ust[e] - alt[e];
     if (boy < 0.05) continue;
-    const N = Math.max(6, Math.min(48, Math.ceil(boy / 1))); // dilim kalınlığı yaklaşık 1 cm (en çok 48 dilim): yuvarlak parçalar basamaklı görünmesin
+    const N = Math.max(6, Math.min(o.userData.dilim ? 72 : 48, Math.ceil(boy / (o.userData.dilim || 1)))); // dilim kalınlığı yaklaşık 1 cm (en çok 48 dilim): yuvarlak parçalar basamaklı görünmesin; kulplarda yarım santim
     const dilim = Array.from({ length: N }, () => [1e9, 1e9, 1e9, -1e9, -1e9, -1e9]);
     for (let t = 0; t < ucgen; t++) for (let k = 0; k < 3; k++) {
       const a = kose(t, k), b = kose(t, (k + 1) % 3), a0 = P[a + e], b0 = P[b + e], kucuk = Math.min(a0, b0), buyuk = Math.max(a0, b0);
@@ -1679,6 +1778,7 @@ export function fotoSahne({ W = 1200, H: Histenen = 0, aksam = false, spot = tru
     return 100 + texNo.get(md.id);
   };
   const bicim = [], daralma = [], egik = []; // dekor: cisim başına biçim ve koni daralması (kutularda boş kalır); eğik elipsoitlerin ek verisi
+  const kbi = [], kab = [], kabNo = new Map(); // kabartmalı kapaklar: kutu başına kabartma sırası ve yön bilgisi; kabartma tabloları
   const b3 = new THREE.Box3();
   const gorunur = o => { for (let a = o; a && a !== scene; a = a.parent) if (!a.visible) return false; return true; };
   kok.traverse(o => {
@@ -1693,7 +1793,8 @@ export function fotoSahne({ W = 1200, H: Histenen = 0, aksam = false, spot = tru
       }
       return;
     }
-    const mt = o.material;
+    if (o.userData.ortu) return; // kabartma gölgesi örtüsü: fotoğrafta gölgeyi motor kabartmadan kendi hesaplar
+    const mt = Array.isArray(o.material) ? o.material[4] : o.material; // kabartmalı kapakta ön yüzün malzemesi
     if (!mt || !mt.color || mt.opacity === 0) return;
     const plakali = mt.userData.tur === 'tezgah' && String(mt.userData.desen).startsWith('plaka:');
     const gmd = mt.userData.md || null, gkod = gmd ? fotoDokuKod(gmd) : 0; // gerçek malzeme: doku varsa kutunun rengi ton çarpanıdır
@@ -1711,8 +1812,14 @@ export function fotoSahne({ W = 1200, H: Histenen = 0, aksam = false, spot = tru
     // dönüş 90°'nin katıysa (duvar ve ada modülleri) kutu eksenlere paraleldir
     const duz = [0, 1, 2].every(i => { const a = [Math.abs(e[i]), Math.abs(e[4 + i]), Math.abs(e[8 + i])].sort((x, y) => y - x); return a[1] < a[0] * 1e-3; });
     if (duz && (o.geometry === KUTU || kutuGeo.has(o.geometry))) {
+      const n0 = out.length, kb = mt.userData.kab;
       b3.setFromObject(o);
       ekle(b3.min.x * 100, b3.min.y * 100, b3.min.z * 100, b3.max.x * 100, b3.max.y * 100, b3.max.z * 100, k.r, k.g, k.b, kod);
+      if (kb && out.length > n0) { // kabartmalı kapak: ince eksen kapağın kalınlığıdır; yerel x (sağ) ve z (ön) eksenlerinin dünyadaki yönü işaretlenir
+        const xInce = b3.max.x - b3.min.x < b3.max.z - b3.min.z, ayna = (xInce ? e[2] : e[0]) < 0, onEksi = (xInce ? e[8] : e[10]) < 0;
+        if (!kabNo.has(kb.anahtar)) { kabNo.set(kb.anahtar, kab.length); kab.push({ w: kb.W, h: kb.H, e: kb.egim, t: kb.ton }); }
+        kbi[n0 / 10] = kabNo.get(kb.anahtar) + 1 + (ayna ? 65536 : 0) + (onEksi ? 131072 : 0);
+      }
     } else if (duz && o.geometry === SIL) { // silindir (tabure, sarkıt, ayak, batarya): motora gerçek silindir olarak gider, basamaklı görünmez
       const ey = [Math.abs(e[4]), Math.abs(e[5]), Math.abs(e[6])], n0 = out.length;
       b3.setFromObject(o);
@@ -1793,6 +1900,7 @@ export function fotoSahne({ W = 1200, H: Histenen = 0, aksam = false, spot = tru
   const N = out.length / 10, yuvarlakVar = bicim.length > 0;
   return {
     shp: yuvarlakVar ? Uint8Array.from({ length: N }, (_, i) => bicim[i] || 0) : null, shq: yuvarlakVar ? Float32Array.from({ length: N }, (_, i) => bicim[i] === 5 ? daralma[i] : daralma[i] || 1) : null, shx: egik.length ? new Float32Array(egik) : null,
+    kbi: kab.length ? Int32Array.from({ length: N }, (_, i) => kbi[i] || 0) : null, kab: kab.length ? kab : null,
     boxes: new Float32Array(out), n: out.length / 10,
     cam: { p: [kx, ky, kz], fw: fw.toArray(), rt: rt.toArray(), up: up.toArray(), W, H, F: (H / 2) / Math.tan(THREE.MathUtils.degToRad(cam.fov) / 2) },
     inside: icerde, sun: gunes, sunC: [3.4, 3.05, 2.6], exp: 1.15, led: aksam ? 40 : 12, seed: 1, pl, night: aksam, texler: texler.length ? texler : null, tex: fotoTex, texG: fotoTex && plakaSec.parlak ? 1 : 0, texS: fotoTex ? plakaSec.olcek : 320,

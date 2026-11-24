@@ -1,7 +1,9 @@
 // Kapak kataloğu: kapak stilleri, cam ve alüminyum çerçeve seçenekleri ve bir ön panelin (kapak, çekmece önü) parça kutuları.
 // Stil listesi, görünüm aileleri ve ölçüler aynı sahibin eB Creator uygulamasındaki kapak çeşitlerinden alınmıştır
-// (orada santimetre, burada milimetre). Bu dosya başka dosyaya bağlı değildir; 3B çizim, kesim listesi ve küçük resimler
-// aynı parça listesini kullanır.
+// (orada santimetre, burada milimetre). 3B çizim, kesim listesi ve küçük resimler aynı parça listesini kullanır.
+// Lake modellerin ön yüzündeki oyma (çerçeve, kemer, lambri, çıta, kafes) kapakkabartma.js içindedir: 3B çizim ve fotoğraf o
+// kabartmayı kullanır; buradaki süsleme kutuları teknik çizimde ve tel / şeffaf görünümde kullanılmaya devam eder.
+import { kabartmaVar } from './kapakkabartma.js';
 
 // Gruplar: [kod, ad]
 export const KAPAK_GRUPLARI = [['temel', 'Temel'], ['1000', 'Lake 1000 · Düz ve kendinden kulplu'], ['2000', 'Lake 2000 · Country'], ['3000', 'Lake 3000 · Çıtalı (pervazlı)'],
@@ -76,7 +78,13 @@ export const camAyari = ayar => ({ tur: camTuru(ayar?.cam?.tur)[0], yuzey: bul(C
 //   bantsiz: boyalı kapak, kenar bandı yok                                 camTur, camYuzey: camın türü ve yüzeyi
 // stil: stil kodu. x, y: panelin sol alt köşesi. pw, ph: genişlik, yükseklik. d: panelin arka yüzünün z'si. K: kapak kalınlığı.
 // altKulp: kendinden kulplu modelde kanal alt kenardadır (üst dolaplar). cam: camAyari() çıktısı.
-export function kapakParcalari(stil, { ad = 'Kapak', x, y, pw, ph, d, K, altKulp = false, cam = null }) {
+export function kapakParcalari(stil, o) {
+  const P = hamParcalar(stil, o), kod = kapakStili(stil).kod;
+  // Kabartmalı model: tam boy panel kabartmayı taşır; süsleme kutuları (kab) 3B çizimde kabartma varken çizilmez
+  if (kabartmaVar(kod) && P.length && !P[0].sus && P[0].mat === 'kapak') { P[0].kabartma = { kod, alt: !!o.altKulp }; for (let i = 1; i < P.length; i++) if (P[i].sus) P[i].kab = 1; }
+  return P;
+}
+function hamParcalar(stil, { ad = 'Kapak', x, y, pw, ph, d, K, altKulp = false, cam = null }) {
   const st = kapakStili(stil), g = st.gorunum, P = [], x1 = x + pw, y1 = y + ph, zz = d + K, boyali = boyaliMi(st.kod);
   const k = (ad2, px, py, pz, sx, sy, sz, mat = 'kapak', ek = null) => { if (sx > 0 && sy > 0 && sz > 0) P.push({ ad: ad2, x: px, y: py, z: pz, sx, sy, sz, mat, tur: 'kapak', ...ek }); };
   const sus = (px, py, pz, sx, sy, sz, ton = 1, mat = 'kapak', ek = null) => k(ad + ' süsü', px, py, pz, sx, sy, sz, mat, { sus: true, ...(ton !== 1 ? { ton } : null), ...ek });
@@ -133,6 +141,11 @@ export function kapakParcalari(stil, { ad = 'Kapak', x, y, pw, ph, d, K, altKulp
     return P;
   }
   panel();
+  if (st.kod === 'lk5010') { // altın çerçeveli: kenardan içeride ince madeni çerçeve
+    const q = Math.min(45, pw * 0.16), e = 7, altin = { sus: true, renk: '#C8A24A' };
+    if (pw > 2 * q + 30 && ph > 2 * q + 30) { k(ad + ' süsü', x + q, y + q, zz, pw - 2 * q, e, 1.2, 'kulp', altin); k(ad + ' süsü', x + q, y1 - q - e, zz, pw - 2 * q, e, 1.2, 'kulp', altin); k(ad + ' süsü', x + q, y + q + e, zz, e, ph - 2 * q - 2 * e, 1.2, 'kulp', altin); k(ad + ' süsü', x1 - q - e, y + q + e, zz, e, ph - 2 * q - 2 * e, 1.2, 'kulp', altin); }
+    return P;
+  }
   if (g === 'kanal') { // dikey kanallar: yaklaşık 70 mm arayla ince koyu çizgi
     if (pw > 120) { const n = Math.max(2, Math.round(pw / 70)); for (let i = 1; i < n; i++) k('Kanal', x + pw * i / n - 1.5, y + 4, zz, 3, ph - 8, 0.8, 'koyu', { sus: true }); }
     return P;
